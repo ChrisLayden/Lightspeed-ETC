@@ -150,7 +150,7 @@ class GroundObservatory(Observatory):
         -------
         results_dict: dict
             A dictionary containing the signal and noise values for the
-            observation. The keys are 'signal', 'tot_noise', 'jitter_noise',
+            observation. The keys are 'signal', 'tot_noise',
             'dark_noise', 'bkg_noise', 'read_noise', 'shot_noise', 'n_aper',
             and 'snr'.
         '''

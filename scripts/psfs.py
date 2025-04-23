@@ -18,7 +18,6 @@ optimal_aperture : array-like
 
 import numpy as np
 from scipy import special, integrate
-from scipy.signal import fftconvolve
 
 
 # Calculate the energy in a square of dimensionless half-width p
@@ -196,31 +195,6 @@ def moffat_psf(num_pix, resolution, pix_size, mu, alpha, beta):
     return arg
     # This isn't done yet--need to do normalization
 
-def get_jittered_psf(psf_subgrid, pix_jitter, resolution):
-    '''Convolve the jitter profile with the PSF.
-    
-    Parameters
-    ----------
-    psf_subgrid : array-like
-        The PSF subgrid.
-    pix_jitter : float
-        The RMS jitter, in pixels.
-    resolution : int
-        The number of subpixels per pixel in the subgrid.
-    
-    Returns
-    -------
-    jittered_psf : array-like
-        The jittered PSF.
-    '''
-    if pix_jitter == 0:
-        return psf_subgrid
-    # Generate a 2D Gaussian array with sigma equal to pix_jitter
-    num_pix = int(psf_subgrid.shape[0] / resolution)
-    jitter_profile = gaussian_psf(num_pix, resolution, 1, [0, 0],
-                                  [[pix_jitter, 0], [0, pix_jitter]])
-    return fftconvolve(psf_subgrid, jitter_profile, mode='same')
-
 def get_optimal_aperture(psf_grid, noise_per_pix, scint_noise=0):
     '''The optimal aperture for maximizing S/N.
 
@@ -298,30 +272,3 @@ if __name__ == '__main__':
     test_gaussian = gaussian_psf(11, 1, 1, [0, 0], [[0.34, 0], [0, 0.34]])
     plt.imshow(test_gaussian)
     plt.show()
-
-    # # # Test the Gaussian
-    # # gaussian = gaussian_psf(5, 5, 1, [0,0], [[1,0],[0,1]])
-    # # fig, ax = plt.subplots()
-    # # im = ax.imshow(gaussian)
-    # # plt.colorbar(im)
-    # # plt.show()
-
-    # # Test the Airy
-    # airy_psf = airy_disk(10, 10, 1, [0,0], 5, 5000)
-    # # Test the jittering
-    # jittered_psf = get_jittered_psf(airy_psf, 0.5, 10)
-
-    # # Plot them next to each other
-    # fig, (ax1, ax2) = plt.subplots(1, 2)
-    # im1 = ax1.imshow(np.log(airy_psf))
-    # plt.colorbar(im1, ax=ax1)
-    # im2 = ax2.imshow(np.log(jittered_psf))
-    # plt.colorbar(im2, ax=ax2)
-    # plt.show()
-
-    # # Test the Moffat
-    # moffat = moffat_psf(10, 10, 1, [0,0], 5, 12.5)
-    # fig, ax = plt.subplots()
-    # im = ax.imshow(np.log(moffat))
-    # plt.colorbar(im)
-    # plt.show()

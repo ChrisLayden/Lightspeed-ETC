@@ -25,92 +25,72 @@ class MyGUI:
         # Defining sensor properties
         self.sens_header = tk.Label(self.root, text='Sensor Properties',
                                     font=['Arial', 16, 'bold'])
-
         self.sens_header.grid(row=0, column=0, columnspan=2,
                               padx=PADX, pady=PADY)
+        # Make a dictionary for sensor properties. Value will be a list,
+        # where the first element is the string for the label, the second
+        # is the tkinter label itself, the third is the tkinter variable, and the
+        # fourth is the tkinter entry box.
+        self.sens_options = list(sensor_dict_lightspeed.keys())
+        self.sens_vars = {'name': ['Select Sensor'],
+                          'pix_size': ['Pixel Size (um)'],
+                          'read_noise': ['Read Noise (e-/pix)'],
+                          'dark_current': ['Dark Current (e-/pix/s)'],
+                          'qe': ['Quantum Efficiency'],
+                          'full_well': ['Full Well Capacity']}
+        for i, (key, value) in enumerate(self.sens_vars.items()):
+            if i == 0:
+                value.append(tk.Label(self.root, text=value[0]))
+                value[1].grid(row=i+1, column=0, padx=PADX, pady=PADY)
+                value.append(tk.StringVar())
+                value[2].trace_add('write', self.set_sens)
+                value[2].trace_add('write', self.clear_results)
+                value.append(tk.OptionMenu(self.root, value[2], *self.sens_options))
+                value[3].grid(row=i+1, column=1, padx=PADX, pady=PADY)
+            else:
+                value.append(tk.Label(self.root, text=value[0]))
+                value[1].grid(row=i+1, column=0, padx=PADX, pady=PADY)
+                value.append(tk.DoubleVar())
+                value[2].trace_add('write', self.clear_results)
+                value.append(tk.Entry(self.root, width=10, textvariable=value[2]))
+                value[3].grid(row=i+1, column=1, padx=PADX, pady=PADY)
 
-        self.sens_labels = []
-        sens_label_names = ['Pixel Size (um)', 'Read Noise (e-/pix)',
-                            'Dark Current (e-/pix/s)', 'Quantum Efficiency',
-                            'Full Well Capacity']
-        self.sens_boxes = []
-        self.sens_vars = []
-        for i, name in enumerate(sens_label_names):
-            self.sens_labels.append(tk.Label(self.root,
-                                             text=sens_label_names[i]))
-            self.sens_labels[i].grid(row=i+2, column=0, padx=PADX, pady=PADY)
-            self.sens_vars.append(tk.DoubleVar())
-            self.sens_boxes.append(tk.Entry(self.root, width=10,
-                                            textvariable=self.sens_vars[i]))
-            self.sens_boxes[i].grid(row=i+2, column=1, padx=PADX, pady=PADY)
-
-        self.sens_vars[0].set(5)
-        self.sens_vars[1].set(3)
-        self.sens_vars[2].set(0.01)
-        self.sens_vars[3].set(1)
-        self.sens_vars[4].set(100000)
         self.plot_qe_button = tk.Button(self.root, text='Plot QE vs. Lambda',
                                     command=self.plot_qe, fg='green')
-        self.plot_qe_button.grid(row=i+3, column=0, columnspan=2, padx=PADX,
+        self.plot_qe_button.grid(row=7, column=0, columnspan=2, padx=PADX,
                                  pady=PADY)
-        
-        # If you want to select a default sensor
-        self.sens_menu_header = tk.Label(self.root, text='Select Sensor',
-                                         font=['Arial', 14, 'italic'])
-        self.sens_menu_header.grid(row=1, column=0, columnspan=1, padx=PADX,
-                                   pady=PADY)
-        self.sens_options = list(sensor_dict_lightspeed.keys())
-        self.sens_name = tk.StringVar()
-        self.sens_menu = tk.OptionMenu(self.root, self.sens_name,
-                                       *self.sens_options)
-        self.sens_menu.grid(row=1, column=1, columnspan=1, padx=PADX,
-                            pady=PADY)
-        self.sens_name.trace_add('write', self.set_sens)
-        self.sens_name.set('qCMOS')
-        self.set_sens()
-        for var in self.sens_vars:
-            var.trace_add('write', self.clear_results)
 
         # Defining telescope properties
         self.tele_header = tk.Label(self.root, text='Telescope Properties',
                                     font=['Arial', 16, 'bold'])
         self.tele_header.grid(row=8, column=0, columnspan=2, padx=PADX,
                               pady=PADY)
-        self.tele_labels = []
-        tele_label_names = ['Diameter (cm)', 'F/number', 'Telescope Throughput', 'Altitude (m)']
-        self.tele_boxes = []
-        self.tele_vars = []
-        for i, name in enumerate(tele_label_names):
-            self.tele_labels.append(tk.Label(self.root,
-                                             text=tele_label_names[i]))
-            self.tele_labels[i].grid(row=i+10, column=0, padx=PADX, pady=PADY)
-            self.tele_vars.append(tk.DoubleVar())
-            self.tele_boxes.append(tk.Entry(self.root, width=10,
-                                            textvariable=self.tele_vars[i]))
-            self.tele_boxes[i].grid(row=i+10, column=1, padx=PADX, pady=PADY)
-
-        self.tele_vars[0].set(10)
-        self.tele_vars[1].set(10)
-        self.tele_vars[2].set(1)
-        self.tele_vars[3].set(0)
-
-        # If you want to select a default telescope
-        self.tele_menu_header = tk.Label(self.root, text='Select Telescope',
-                                         font=['Arial', 14, 'italic'])
-        self.tele_menu_header.grid(row=9, column=0, columnspan=1, padx=PADX,
-                                   pady=PADY)
+        # Similarly, make a dictionary for telescope properties.
+        # ZZZ NEED TO FIGURE OUT WHAT CHANGED TO MAKE RESULTS SLIGHTLY DIFFERENT
         self.tele_options = list(telescope_dict_lightspeed.keys())
-        self.tele_name = tk.StringVar()
-        self.tele_menu = tk.OptionMenu(self.root, self.tele_name,
-                                       *self.tele_options)
-        self.tele_menu.grid(row=9, column=1, columnspan=1, padx=PADX,
-                            pady=PADY)
-        self.tele_name.trace_add('write', self.set_tele)
-        self.tele_name.trace_add('write', self.update_altitude)
-        self.tele_name.set('Magellan Prototype')
-        self.tele_name.trace_add('write', self.update_reimaging_throughput)
-        for var in self.tele_vars:
-            var.trace_add('write', self.clear_results)
+        self.tele_vars_dict = {'name': ['Select Telescope'],
+                               'diam': ['Diameter (cm)'],
+                               'f_num': ['F/number'],
+                               'bandpass': ['Telescope Throughput'],
+                               'altitude': ['Altitude (m)']}
+        for i, (key, value) in enumerate(self.tele_vars_dict.items()):
+            if i == 0:
+                value.append(tk.Label(self.root, text=value[0]))
+                value[1].grid(row=i+9, column=0, padx=PADX, pady=PADY)
+                value.append(tk.StringVar())
+                value[2].trace_add('write', self.set_tele)
+                value[2].trace_add('write', self.clear_results)
+                value[2].trace_add('write', self.update_altitude)
+                value[2].trace_add('write', self.update_reimaging_throughput)
+                value.append(tk.OptionMenu(self.root, value[2], *self.tele_options))
+                value[3].grid(row=i+9, column=1, padx=PADX, pady=PADY)
+            else:
+                value.append(tk.Label(self.root, text=value[0]))
+                value[1].grid(row=i+9, column=0, padx=PADX, pady=PADY)
+                value.append(tk.DoubleVar())
+                value[2].trace_add('write', self.clear_results)
+                value.append(tk.Entry(self.root, width=10, textvariable=value[2]))
+                value[3].grid(row=i+9, column=1, padx=PADX, pady=PADY)
 
         # Defining observing properties
         self.obs_header = tk.Label(self.root, text='Observing Properties',
@@ -253,7 +233,8 @@ class MyGUI:
                                     command=self.plot_mag_vs_noise, fg='green')
         self.plot_button.grid(row=9, column=4, columnspan=2, padx=PADX,
                               pady=PADY)
-
+        self.sens_vars['name'][2].set('qCMOS')
+        self.tele_vars_dict['name'][2].set('Magellan Prototype')
         self.root.mainloop()
 
     def clear_results(self, *args):
@@ -265,11 +246,11 @@ class MyGUI:
     def update_altitude(self, *args):
         # Update the altitude of the telescope based on the selected telescope
         altitude_dict = {'Magellan': 2516, 'Palomar': 1712}
-        if 'Magellan' in self.tele_name.get():
-            self.tele_vars[3].set(altitude_dict['Magellan'])
+        if 'Magellan' in self.tele_vars_dict['name'][2].get():
+            self.tele_vars_dict['altitude'][2].set(altitude_dict['Magellan'])
         # Check if name is WINTER or Hale. If either, use palomar alt
-        elif 'WINTER' in self.tele_name.get() or 'Hale' in self.tele_name.get():
-            self.tele_vars[3].set(altitude_dict['Palomar'])
+        elif 'WINTER' in self.tele_vars_dict['name'][2].get() or 'Hale' in self.tele_vars_dict['name'][2].get():
+            self.tele_vars_dict['altitude'][2].set(altitude_dict['Palomar'])
 
     def update_reimaging_throughput(self, *args):
         throughput_dict_prototype = {'Sloan g\'': 0.57, 'Sloan r\'': 0.65,
@@ -278,9 +259,9 @@ class MyGUI:
         throughput_dict_lightspeed = {'Sloan g\'': 0.85, 'Sloan r\'': 0.85,
                                      'Sloan i\'': 0.85, 'Sloan z\'': 0.85,
                                      'Sloan u\'': 0.85}
-        if self.tele_name.get() == 'Magellan Prototype':
+        if self.tele_vars_dict['name'][2].get() == 'Magellan Prototype':
             throughput_dict = throughput_dict_prototype
-        elif self.tele_name.get() == 'Magellan Lightspeed':
+        elif self.tele_vars_dict['name'][2].get() == 'Magellan Lightspeed':
             throughput_dict = throughput_dict_lightspeed
         else:
             self.obs_vars[5].set(1.0)
@@ -292,38 +273,41 @@ class MyGUI:
             self.obs_vars[5].set(1.0)
 
     def set_sens(self, *args):
-        self.sens = sensor_dict_lightspeed[self.sens_name.get()]
-        self.sens_vars[0].set(self.sens.pix_size)
-        self.sens_vars[1].set(self.sens.read_noise)
-        self.sens_vars[2].set(self.sens.dark_current)
-        self.sens_vars[4].set(self.sens.full_well)
-        if self.sens_name.get() != 'Define New Sensor':
-            self.sens_vars[3] = tk.StringVar()
-            self.sens_vars[3].set('ARRAY')
-            self.sens_boxes[3].config(textvariable=self.sens_vars[3])
-            self.sens_boxes[3].config(state='disabled')
+        self.sens = sensor_dict_lightspeed[self.sens_vars['name'][2].get()]
+        self.sens_vars['pix_size'][2].set(self.sens.pix_size)
+        self.sens_vars['read_noise'][2].set(self.sens.read_noise)
+        self.sens_vars['dark_current'][2].set(self.sens.dark_current)
+        self.sens_vars['full_well'][2].set(self.sens.full_well)
+        if self.sens_vars['name'][2].get() != 'Define New Sensor':
+            self.sens_vars['qe'][2] = tk.StringVar()
+            self.sens_vars['qe'][2].set('ARRAY')
+            self.sens_vars['qe'][3].config(textvariable=self.sens_vars['qe'][2])
+            self.sens_vars['qe'][3].config(state='disabled')
         else:
-            self.sens_vars[3] = tk.DoubleVar()
-            self.sens_boxes[3].config(textvariable=self.sens_vars[3])
-            self.sens_boxes[3].config(state='normal')
-            self.sens_vars[3].set(np.mean(self.sens.qe.throughput))
+            self.sens_vars['qe'][2] = tk.DoubleVar()
+            self.sens_vars['qe'][3].config(textvariable=self.sens_vars['qe'][2])
+            self.sens_vars['qe'][3].config(state='normal')
+            self.sens_vars['qe'][3].set(np.mean(self.sens.qe.throughput))
 
     def set_tele(self, *args):
-        self.tele = telescope_dict_lightspeed[self.tele_name.get()]
-        self.tele_vars[0].set(self.tele.diam)
-        self.tele_vars[1].set(self.tele.f_num)
-        self.tele_vars[2].set(self.tele.bandpass)
+        self.tele = telescope_dict_lightspeed[self.tele_vars_dict['name'][2].get()]
+        self.tele_vars_dict['diam'][2].set(self.tele.diam)
+        self.tele_vars_dict['f_num'][2].set(self.tele.f_num)
+        self.tele_vars_dict['bandpass'][2].set(self.tele.bandpass)
 
     def set_obs(self):
-        sens_vars = [i.get() for i in self.sens_vars]
-        if sens_vars[3] == 'ARRAY':
-            sens_vars[3] = self.sens.qe
+        if self.sens_vars['qe'][2].get() == 'ARRAY':
+            qe = self.sens.qe
         else:
-            sens_vars[3] = S.UniformTransmission(float(sens_vars[3]))
-        sens = Sensor(*sens_vars)
-        tele_vars = [i.get() for i in self.tele_vars]
-        tele_vars[2] = S.UniformTransmission(tele_vars[2])
-        tele = Telescope(*tele_vars)
+            qe = S.UniformTransmission(float(self.sens_vars['qe'][2].get()))
+        sens = Sensor(pix_size=self.sens_vars['pix_size'][2].get(),
+                      read_noise=self.sens_vars['read_noise'][2].get(),
+                      dark_current=self.sens_vars['dark_current'][2].get(),
+                      full_well=self.sens_vars['full_well'][2].get(),
+                      qe=qe)
+        tele = Telescope(diam=self.tele_vars_dict['diam'][2].get(),
+                         f_num=self.tele_vars_dict['f_num'][2].get(),
+                         bandpass=self.tele_vars_dict['bandpass'][2].get())
         exposure_time = self.obs_vars[0].get()
         num_exposures = int(self.obs_vars[1].get())
         limiting_snr = self.obs_vars[2].get()
@@ -332,7 +316,7 @@ class MyGUI:
         filter_bp = S.UniformTransmission(reimaging_throughput) * filter_bp
         seeing_arcsec = self.obs_vars[3].get()
         obs_zo = self.obs_vars[6].get()
-        obs_altitude = self.tele_vars[3].get()
+        obs_altitude = self.tele_vars_dict['altitude'][2].get()
         obs_alpha = self.obs_vars[7].get()
         obs_rho = self.obs_vars[8].get()
         observatory = GroundObservatory(sens, tele, exposure_time=exposure_time,
@@ -369,6 +353,10 @@ class MyGUI:
     def run_calcs(self):
         try:
             observatory = self.set_obs()
+            print(observatory.telescope.diam,
+                  observatory.telescope.f_num,
+                  observatory.telescope.bandpass,
+                  observatory.altitude)
             limiting_mag = observatory.limiting_mag()
             saturating_mag = observatory.saturating_mag()
 
@@ -416,7 +404,7 @@ class MyGUI:
         # Check if uniform transmission
         if isinstance(qe, S.UniformTransmission):
             wave = np.linspace(200, 1000, 100)
-            throughput = np.ones_like(wave) * self.sens_vars[3].get()
+            throughput = np.ones_like(wave) * self.sens_vars['qe'][2].get()
             plt.plot(wave, throughput * 100)
         else:
             plt.plot(qe.wave / 10, qe.throughput * 100)
@@ -463,7 +451,7 @@ class MyGUI:
         plt.yscale('log')
         plt.legend()
         # Make title text with telescope name, bandbpass, and exposure time
-        tele_name = self.tele_name.get()
+        tele_name = self.tele_vars_dict['name'][2].get()
         bandpass = self.obs_vars[4].get()
         exposure_time = self.obs_vars[0].get()
         title = f'{tele_name}, {bandpass}, t_exp={exposure_time}s'
