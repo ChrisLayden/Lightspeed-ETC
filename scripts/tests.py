@@ -3,10 +3,7 @@ import warnings
 import psfs
 import numpy as np
 import pysynphot as S
-from sky_background import bkg_spectrum
-from jitter_tools import jittered_array, integrated_stability, get_pointings, shift_values
 import matplotlib.pyplot as plt
-import time
 
 # Test Gaussian psf
 def test_gaussian_psf():

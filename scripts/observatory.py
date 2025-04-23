@@ -16,8 +16,30 @@ import psfs
 import numpy as np
 import pysynphot as S
 from sky_background import bkg_spectrum_space
-from jitter_tools import shift_values
 
+def shift_values(arr, del_x, del_y):
+    '''Shift values in an array by a specified discrete displacement.
+    
+    Parameters
+    ----------
+    arr : array-like
+        The intensity grid.
+    del_x : int
+        The x displacement, in subpixels.
+    del_y : int
+        The y displacement, in subpixels.
+        
+    Returns
+    -------
+    new_arr : array-like
+        The shifted array.
+    '''
+    m, n = arr.shape
+    new_arr = np.zeros_like(arr)
+    # print(abs(del_x) > m, abs(del_y) > n)
+    new_arr[max(del_y, 0):m+min(del_y, 0), max(del_x, 0):n+min(del_x, 0)] = \
+        arr[-min(del_y, 0):m-max(del_y, 0), -min(del_x, 0):n-max(del_x, 0)]
+    return new_arr
 
 class Sensor(object):
     '''Class specifying a photon-counting sensor.
