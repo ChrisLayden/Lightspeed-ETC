@@ -329,7 +329,7 @@ class Observatory(object):
         exposure_snr = signal / noise
         stack_snr = exposure_snr * np.sqrt(self.num_exposures)
         return stack_snr
-    
+
     def limiting_mag(self, eps=0.05):
         '''Get the limiting AB magnitude for the observatory parameters.'''
         mag = 10

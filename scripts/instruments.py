@@ -5,7 +5,7 @@
 import os
 import pysynphot as S
 import numpy as np
-from observatory import Observatory, Sensor, Telescope
+from observatory import Sensor, Telescope
 
 data_folder = os.path.dirname(__file__) + '/../data/'
 
@@ -33,7 +33,7 @@ sensor_dict_gb = {'Define New Sensor': basic_sensor, 'Sony IMX 455': imx455,
                   'COSMOS': cosmos, 'qCMOS': qcmos}
 
 sensor_dict_lightspeed = {'Define New Sensor': basic_sensor, 'qCMOS': qcmos}
-                  
+
 # Defining telescopes
 basic_tele = Telescope(diam=10, f_num=1)
 
@@ -48,7 +48,7 @@ winter_bandpass = S.UniformTransmission(0.23)
 winter_tele = Telescope(diam=100, f_num=6.0, psf_type='airy', bandpass=winter_bandpass)
 
 # Telescope dictionary for ground-based observatories
-telescope_dict_gb = {'Define New Telescope': basic_tele, 
+telescope_dict_gb = {'Define New Telescope': basic_tele,
                      'Magellan': magellan_tele_native,
                      'Magellan LightSpeed': magellan_tele_lightspeed,
                      'Hale': hale_tele}
@@ -104,7 +104,8 @@ filter_dict_gb = {'None': no_filter, 'Johnson U': johnson_u,
                   'Johnson B': johnson_b, 'Johnson V': johnson_v,
                   'Johnson R': johnson_r, 'Johnson I': johnson_i,
                   'Johnson J': johnson_j, 
-                  'Sloan Uprime': sloan_uprime, 'Sloan Gprime': sloan_gprime, 'Sloan Rprime': sloan_rprime,
+                  'Sloan Uprime': sloan_uprime, 'Sloan Gprime': sloan_gprime,
+                  'Sloan Rprime': sloan_rprime,
                   'SWIR (900-1700 nm 100%)': swir_filter,
                   'Visible (400-700 nm 100%)': vis_filter}
 
