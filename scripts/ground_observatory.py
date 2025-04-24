@@ -78,7 +78,7 @@ class GroundObservatory(Observatory):
         # The zenith angle of the moon, in degrees.
         self.zm = zo - rho
         self.scint_noise = self.get_scint_noise()
-        
+
     @property
     def alpha(self):
         '''The lunar phase angle during observation.'''
@@ -98,7 +98,7 @@ class GroundObservatory(Observatory):
         airmass_factor = self.airmass ** (3/2)
         altitude_factor = np.exp(-self.altitude / 8000)
         return 0.09 * diam_factor * exp_time_factor * airmass_factor * altitude_factor
-    
+
     def bkg_per_pix(self):
         '''The background noise per pixel, in e-/pix.'''
         bkg_wave, bkg_ilam = bkg_spectrum_ground(alpha=self.alpha, rho=self.rho,
@@ -107,13 +107,13 @@ class GroundObservatory(Observatory):
         bkg_sp = S.ArraySpectrum(bkg_wave, bkg_flam, fluxunits='flam')
         bkg_signal = self.tot_signal(bkg_sp)
         return bkg_signal
-    
-    def turnover_exp_time(self, eps=0.02):
+
+    def turnover_exp_time(self):
         '''Get the exposure time at which background noise is equal to read noise.'''
         read_bkg_ratio = self.sensor.read_noise / np.sqrt(self.bkg_per_pix())
         return self.exposure_time * read_bkg_ratio ** 2
-    
-    def get_opt_aper(self, spectrum=None, pos=np.array([0, 0]), img_size=11,
+
+    def get_aper(self, spectrum=None, pos=np.array([0, 0]), img_size=11,
                      resolution=11, num_aper_frames=1):
         '''Find the optimal aperture for a given point source.
         
@@ -151,7 +151,8 @@ class GroundObservatory(Observatory):
             aper_found = False
             while not aper_found:
                 signal_grid_fine = self.signal_grid_fine(spectrum, pos, img_size, resolution)
-                intrapix_grid = self.get_intrapix_grid(img_size, resolution, self.sensor.intrapix_sigma)
+                intrapix_grid = self.get_intrapix_grid(img_size, resolution,
+                                                       self.sensor.intrapix_sigma)
                 signal_grid_fine *= intrapix_grid
                 signal_grid = signal_grid_fine.reshape((img_size, resolution,
                                                         img_size, resolution)).sum(axis=(1, 3))
@@ -204,7 +205,8 @@ class GroundObservatory(Observatory):
         '''
         # For a realistic image with all noise sources, use the get_images method.
         # Here we just summarize signal and noise characteristics.
-        optimal_aper = self.get_opt_aper(spectrum, pos, img_size, resolution)
+        optimal_aper = self.get_aper(spectrum, pos, img_size, resolution,
+                                         num_aper_frames=num_aper_frames)
         img_size = optimal_aper.shape[0]
         signal_grid_fine = self.signal_grid_fine(spectrum, pos, img_size, resolution)
         intrapix_grid = self.get_intrapix_grid(img_size, resolution, self.sensor.intrapix_sigma)
@@ -242,5 +244,3 @@ if __name__ == '__main__':
                                  aper_radius=10)
     my_spectrum = S.FlatSpectrum(20, fluxunits='abmag')
     print(magellan.observe(my_spectrum))
-    print(magellan.turnover_exp_time(my_spectrum))
-    

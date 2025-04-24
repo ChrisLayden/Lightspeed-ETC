@@ -451,7 +451,7 @@ class Observatory(object):
         relative_signal_grid /= np.max(relative_signal_grid)
         return relative_signal_grid
 
-    def get_opt_aper(self, spectrum=None, pos=np.array([0, 0]), img_size=11,
+    def get_aper(self, spectrum=None, pos=np.array([0, 0]), img_size=11,
                      resolution=11):
         '''Find the optimal aperture for a given point source.
         
@@ -536,16 +536,16 @@ class Observatory(object):
             img_size += 1
         if resolution % 2 == 0:
             resolution += 1
-        opt_aper = self.get_opt_aper(spectrum, pos, img_size, resolution)
-        img_size = opt_aper.shape[0]
-        n_aper = np.sum(opt_aper)
+        aper = self.get_aper(spectrum, pos, img_size, resolution)
+        img_size = aper.shape[0]
+        n_aper = np.sum(aper)
         initial_grid = self.signal_grid_fine(spectrum, pos, img_size, resolution)
         intrapix_sigma = self.sensor.intrapix_sigma
         intrapix_grid = self.get_intrapix_grid(img_size, resolution, intrapix_sigma)
         initial_grid *= intrapix_grid
         frame = initial_grid.reshape((img_size, resolution, img_size,
                                       resolution)).sum(axis=(1, 3))
-        signal = np.sum(frame * opt_aper) * self.num_exposures
+        signal = np.sum(frame * aper) * self.num_exposures
         shot_noise = np.sqrt(signal)
         dark_noise = np.sqrt(n_aper * self.num_exposures *
                              self.sensor.dark_current * self.exposure_time)
@@ -590,7 +590,7 @@ class Observatory(object):
             An array containing the simulated images. These images
             are not background or bias-subtracted, nor are they
             corrected for subpixel effects.
-        opt_aper: array-like
+        aper: array-like
             The optimal aperture for the images.
         '''
 
@@ -598,10 +598,10 @@ class Observatory(object):
             img_size += 1
         if resolution % 2 == 0:
             resolution += 1
-        opt_aper = self.get_opt_aper(spectrum, pos, img_size, resolution)
+        aper = self.get_aper(spectrum, pos, img_size, resolution)
         num_frames = num_images * self.num_exposures
         # Adjust img_size if it had to be increased to contain the optimal aperture
-        img_size = opt_aper.shape[0]
+        img_size = aper.shape[0]
         initial_grid = self.signal_grid_fine(spectrum, pos, img_size, resolution)
         read_signal = np.random.normal(0, self.sensor.read_noise,
                                         (img_size, img_size, num_frames))
@@ -619,7 +619,7 @@ class Observatory(object):
             frame = frame + read_signal[:, :, i] + bias
             images[i // self.num_exposures] += frame
 
-        return images, opt_aper
+        return images, aper
 
 # Some tests of Observatory behavior
 if __name__ == '__main__':

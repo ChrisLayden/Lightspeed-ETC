@@ -108,7 +108,7 @@ class MyGUI:
                               'zo': ['Object Zenith Angle (deg)'],
                               'alpha': ['Lunar Phase (deg)'],
                               'rho': ['Object-Moon Separation (deg)'],
-                              'aper_rad': ['Aper Radius (pix) (\'None\' for optimal)']}
+                              'aper_rad': ['Aperture Radius (pix)\n(Leave blank for optimal aperture)']}
         for i, (key, value) in enumerate(self.obs_vars_dict.items()):
             if key == 'filter':
                 value.append(tk.Label(self.root, text=value[0]))
@@ -162,12 +162,10 @@ class MyGUI:
                                         font=['Arial', 16, 'bold'])
         self.spectrum_header.grid(row=0, column=6, columnspan=1, padx=PADX,
                                   pady=PADY)
-
         self.run_button_2 = tk.Button(self.root, fg='green', text='RUN',
                                     command=self.run_observation)
         self.run_button_2.grid(row=0, column=7, columnspan=1, padx=PADX,
                              pady=PADY)
-                              
         self.flat_spec_bool = tk.BooleanVar(value=True)
         self.flat_spec_check = tk.Checkbutton(self.root,
                                               text='Flat spectrum at AB mag',
@@ -177,7 +175,6 @@ class MyGUI:
         self.flat_spec_entry = tk.Entry(self.root, width=10,
                                         textvariable=self.flat_spec_mag)
         self.flat_spec_entry.grid(row=1, column=7, padx=PADX, pady=PADY)
-
         self.bb_spec_bool = tk.BooleanVar()
         self.bb_spec_check = tk.Checkbutton(self.root,
                                             text='Blackbody with Temp (in K)',
@@ -200,7 +197,6 @@ class MyGUI:
         self.bb_spec_entry_3 = tk.Entry(self.root, width=10,
                                         textvariable=self.bb_lbol)
         self.bb_spec_entry_3.grid(row=4, column=7, padx=PADX, pady=PADY)
-
         self.user_spec_bool = tk.BooleanVar()
         self.user_spec_check = tk.Checkbutton(self.root,
                                               text='Spectrum in spectra.py named',
@@ -210,7 +206,6 @@ class MyGUI:
         self.user_spec_entry = tk.Entry(self.root, width=20,
                                         textvariable=self.user_spec_name)
         self.user_spec_entry.grid(row=5, column=7, padx=PADX, pady=PADY)
-
         self.spec_results_labels = []
         spec_results_label_names = ['Signal (e-)', 'Total Noise (e-)', 'SNR',
                                     'Photometric Precision (ppm)', 'Aperture Size (pix)',
@@ -218,9 +213,7 @@ class MyGUI:
         self.spec_results_data = []
         for i, name in enumerate(spec_results_label_names):
             self.spec_results_labels.append(tk.Label(self.root, text=name))
-
             self.spec_results_data.append(tk.Label(self.root, fg='red'))
-            # Trying to figure out spacing
             self.spec_results_labels[i].grid(row=i+6, column=6, padx=PADX, pady=PADY)
             self.spec_results_data[i].grid(row=i+6, column=7, padx=PADX, pady=PADY)
 
@@ -242,10 +235,10 @@ class MyGUI:
         self.obs_vars_dict['zo'][2].set(0.0)
         self.obs_vars_dict['alpha'][2].set(180)
         self.obs_vars_dict['rho'][2].set(45)
-        self.obs_vars_dict['aper_rad'][2].set('None')
+        # self.obs_vars_dict['aper_rad'][2].set('None')
         self.root.mainloop()
 
-    def clear_results(self, *args):
+    def clear_results(self, *_):
         '''Clear results when a new sensor or telescope is selected'''
         labels = [value[3] for value in self.basic_results.values()]
         for label in labels:
@@ -253,7 +246,7 @@ class MyGUI:
         for label in self.spec_results_data:
             label.config(text='')
 
-    def update_altitude(self, *args):
+    def update_altitude(self, *_):
         '''Update altitude of the telescope based on the selected telescope'''
         altitude_dict = {'Magellan': 2516, 'Palomar': 1712}
         tele_name = self.tele_vars['name'][2].get()
@@ -263,7 +256,7 @@ class MyGUI:
         elif 'WINTER' in tele_name or 'Hale' in tele_name:
             self.tele_vars['altitude'][2].set(altitude_dict['Palomar'])
 
-    def update_reimaging_throughput(self, *args):
+    def update_reimaging_throughput(self, *_):
         '''Update reimaging throughput based on the selected telescope and filter'''
         tele_name = self.tele_vars['name'][2].get()
         filter_name = self.obs_vars_dict['filter'][2].get()
@@ -287,7 +280,7 @@ class MyGUI:
         else:
             self.obs_vars_dict['reim_throughput'][2].set(1.0)
 
-    def set_sens(self, *args):
+    def set_sens(self, *_):
         '''Set the sensor based on the selected sensor name.'''
         self.sens = sensor_dict_lightspeed[self.sens_vars['name'][2].get()]
         self.sens_vars['pix_size'][2].set(self.sens.pix_size)
@@ -305,7 +298,7 @@ class MyGUI:
             self.sens_vars['qe'][3].config(state='normal')
             self.sens_vars['qe'][3].set(np.mean(self.sens.qe.throughput))
 
-    def set_tele(self, *args):
+    def set_tele(self, *_):
         '''Set the telescope based on the selected telescope name.'''
         self.tele = telescope_dict_lightspeed[self.tele_vars['name'][2].get()]
         self.tele_vars['diam'][2].set(self.tele.diam)
@@ -338,7 +331,7 @@ class MyGUI:
         obs_alpha = self.obs_vars_dict['alpha'][2].get()
         obs_rho = self.obs_vars_dict['rho'][2].get()
         obs_aper_rad = self.obs_vars_dict['aper_rad'][2].get()
-        obs_aper_rad = None if str(obs_aper_rad) == 'None' else obs_aper_rad
+        obs_aper_rad = None if str(obs_aper_rad) in ['', 'None'] else obs_aper_rad
         observatory = GroundObservatory(sens, tele, exposure_time=exposure_time,
                                         num_exposures=num_exposures,
                                         limiting_s_n=limiting_snr,
@@ -356,8 +349,8 @@ class MyGUI:
             abmag = self.flat_spec_mag.get()
             # Convert to Jansky's; sometimes Pysynphot freaks out when
             # using AB magnitudes.
-            fluxdensity_Jy = 10 ** (-0.4 * (abmag - 8.90))
-            spectrum = S.FlatSpectrum(fluxdensity=fluxdensity_Jy,
+            fluxdensity_jy = 10 ** (-0.4 * (abmag - 8.90))
+            spectrum = S.FlatSpectrum(fluxdensity=fluxdensity_jy,
                                       fluxunits='Jy')
             # spectrum.convert('fnu')
         elif self.bb_spec_bool.get():

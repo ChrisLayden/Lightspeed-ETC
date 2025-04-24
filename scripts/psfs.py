@@ -233,7 +233,7 @@ def get_optimal_aperture(psf_grid, noise_per_pix, scint_noise=0):
         scint_noise_tot = scint_noise_tot + scint_noise * max_sig_remaining
         noise = np.sqrt(signal + (n_aper + 1) * noise_per_pix ** 2 + scint_noise_tot ** 2)
         snr = signal / noise
-        
+
         if snr > snr_max:
             snr_max = snr
             aperture_grid[imax, jmax] = 1
