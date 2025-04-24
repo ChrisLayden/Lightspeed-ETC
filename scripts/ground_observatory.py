@@ -22,7 +22,8 @@ class GroundObservatory(Observatory):
 
     def __init__(self, sensor, telescope, filter_bandpass=S.UniformTransmission(1.0),
                  exposure_time=1., num_exposures=1, seeing=1.0,
-                 limiting_s_n=5., altitude=0, alpha=180, zo=0, rho=45):
+                 limiting_s_n=5., altitude=0, alpha=180, zo=0, rho=45,
+                 aper_radius=None):
         '''Initialize the GroundObservatory class.
         
         Parameters
@@ -54,13 +55,17 @@ class GroundObservatory(Observatory):
             The angular separation between the moon and the object, in degrees.
             For simplicity, we assume the moon is lower in the sky than the
             object, with zenith angle zo - rho.
+        aper_rad: int
+            The radius of the aperture, in pixels. If None, the optimal
+            aperture will be calculated.
         '''
 
         super().__init__(sensor=sensor, telescope=telescope,
                          filter_bandpass=filter_bandpass,
                          exposure_time=exposure_time,
                          num_exposures=num_exposures,
-                         limiting_s_n=limiting_s_n)
+                         limiting_s_n=limiting_s_n,
+                         aper_radius=aper_radius)
 
         telescope.psf_type = 'gaussian'
         telescope.fwhm = seeing
@@ -103,23 +108,66 @@ class GroundObservatory(Observatory):
         bkg_signal = self.tot_signal(bkg_sp)
         return bkg_signal
     
-    def turnover_exp_time(self, spectrum, eps=0.02):
+    def turnover_exp_time(self, eps=0.02):
         '''Get the exposure time at which background noise is equal to read noise.'''
-        exp_time_initial = self.exposure_time
-        new_exp_time = exp_time_initial
-        results_dict = self.observe(spectrum)
-        read_over_bkg = results_dict['read_noise'] / results_dict['bkg_noise']
-        i = 0
-        while abs(read_over_bkg - 1) > eps and i < 10:
-            new_exp_time = self.exposure_time * read_over_bkg
-            self.exposure_time = new_exp_time
-            results_dict = self.observe(spectrum)
-            read_over_bkg = results_dict['read_noise'] / results_dict['bkg_noise']
-            i += 1
-        if i == 10:
-            raise ValueError("Turnover exposure time not found within 10 iterations.")
-        self.exposure_time = exp_time_initial
-        return new_exp_time
+        read_bkg_ratio = self.sensor.read_noise / np.sqrt(self.bkg_per_pix())
+        return self.exposure_time * read_bkg_ratio ** 2
+    
+    def get_opt_aper(self, spectrum=None, pos=np.array([0, 0]), img_size=11,
+                     resolution=11, num_aper_frames=1):
+        '''Find the optimal aperture for a given point source.
+        
+        Parameters
+        ----------
+        spectrum: pysynphot.spectrum object
+            The spectrum of the point source to observe.
+        pos: array-like (default [0, 0])
+            The centroid position of the source on the central pixel,
+            in microns, with [0,0] representing the center of the
+            central pixel.
+        img_size: int (default 11)
+            The extent of the subarray, in pixels.
+        resolution: int (default 11)
+            The number of sub-pixels per pixel.
+        '''
+        if self.aper_radius is not None:
+            # Make an aperture with the specified radius on the subarray,
+            # centered on the central pixel.
+            img_size = np.max([self.aper_radius * 2 + 3, img_size])
+            aper = np.zeros((img_size, img_size))
+            # For pixels within a distance of aper_radius from the center,
+            # set the pixel value to 1.
+            # Get an array of pixel distances from the center
+            x = np.arange(img_size) - img_size // 2
+            y = np.arange(img_size) - img_size // 2
+            x, y = np.meshgrid(x, y)
+            pix_distances = np.sqrt(x ** 2 + y ** 2)
+            # Array of 1s and 0s, where 1 is within the aperture radius
+            aper[pix_distances <= self.aper_radius] = 1
+            return aper
+        else:
+            if spectrum is None:
+                raise ValueError('Spectrum must be specified to find the optimal aperture.')
+            aper_found = False
+            while not aper_found:
+                signal_grid_fine = self.signal_grid_fine(spectrum, pos, img_size, resolution)
+                intrapix_grid = self.get_intrapix_grid(img_size, resolution, self.sensor.intrapix_sigma)
+                signal_grid_fine *= intrapix_grid
+                signal_grid = signal_grid_fine.reshape((img_size, resolution,
+                                                        img_size, resolution)).sum(axis=(1, 3))
+                stack_image = signal_grid * num_aper_frames
+                stack_pix_noise = self.single_pix_noise() * np.sqrt(num_aper_frames)
+                # Relative scintillation noise over a stack decreases, because the exposure time
+                # is effectively longer.
+                stack_scint_noise = self.scint_noise / np.sqrt(num_aper_frames)
+                optimal_aper = psfs.get_optimal_aperture(stack_image, stack_pix_noise,
+                                                        scint_noise=stack_scint_noise)
+                aper_pads = psfs.get_aper_padding(optimal_aper)
+                if min(aper_pads) > 0:
+                    aper_found = True
+                else:
+                    img_size += 5
+            return optimal_aper
 
     def observe(self, spectrum, pos=np.array([0, 0]), img_size=11,
                 resolution=11, num_aper_frames=1):
@@ -156,26 +204,13 @@ class GroundObservatory(Observatory):
         '''
         # For a realistic image with all noise sources, use the get_images method.
         # Here we just summarize signal and noise characteristics.
-        # First find the optimal aperture. Make the subarray larger if necessary.
-        aper_found = False
-        while not aper_found:
-            signal_grid_fine = self.signal_grid_fine(spectrum, pos, img_size, resolution)
-            intrapix_grid = self.get_intrapix_grid(img_size, resolution, self.sensor.intrapix_sigma)
-            signal_grid_fine *= intrapix_grid
-            signal_grid = signal_grid_fine.reshape((img_size, resolution,
-                                                    img_size, resolution)).sum(axis=(1, 3))
-            stack_image = signal_grid * num_aper_frames
-            stack_pix_noise = self.single_pix_noise() * np.sqrt(num_aper_frames)
-            # Relative scintillation noise over a stack decreases, because the exposure time
-            # is effectively longer.
-            stack_scint_noise = self.scint_noise / np.sqrt(num_aper_frames)
-            optimal_aper = psfs.get_optimal_aperture(stack_image, stack_pix_noise,
-                                                     scint_noise=stack_scint_noise)
-            aper_pads = psfs.get_aper_padding(optimal_aper)
-            if min(aper_pads) > 0:
-                aper_found = True
-            else:
-                img_size += 5
+        optimal_aper = self.get_opt_aper(spectrum, pos, img_size, resolution)
+        img_size = optimal_aper.shape[0]
+        signal_grid_fine = self.signal_grid_fine(spectrum, pos, img_size, resolution)
+        intrapix_grid = self.get_intrapix_grid(img_size, resolution, self.sensor.intrapix_sigma)
+        signal_grid_fine *= intrapix_grid
+        signal_grid = signal_grid_fine.reshape((img_size, resolution,
+                                                img_size, resolution)).sum(axis=(1, 3))
         signal = np.sum(signal_grid * optimal_aper) * self.num_exposures
         n_aper = np.sum(optimal_aper)
         shot_noise = np.sqrt(signal)
@@ -203,7 +238,8 @@ if __name__ == '__main__':
     magellan_telescope = Telescope(diam=650, f_num=2)
     magellan = GroundObservatory(sensor=imx455, telescope=magellan_telescope,
                                  altitude=2, exposure_time=0.1,
-                                 seeing=0.5, alpha=180, zo=0, rho=45)
+                                 seeing=0.5, alpha=180, zo=0, rho=45,
+                                 aper_radius=10)
     my_spectrum = S.FlatSpectrum(20, fluxunits='abmag')
     print(magellan.observe(my_spectrum))
     print(magellan.turnover_exp_time(my_spectrum))

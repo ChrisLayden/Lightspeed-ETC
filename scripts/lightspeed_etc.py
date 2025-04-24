@@ -2,6 +2,7 @@
 
 import os
 import tkinter as tk
+from tkinter import messagebox
 import pysynphot as S
 import numpy as np
 import matplotlib.pyplot as plt
@@ -9,12 +10,12 @@ from spectra import *
 from observatory import Sensor, Telescope, Observatory
 from ground_observatory import GroundObservatory
 from instruments import sensor_dict_lightspeed, telescope_dict_lightspeed, filter_dict_lightspeed
-from tkinter import messagebox
 
 data_folder = os.path.dirname(__file__) + '/../data/'
 
 
 class MyGUI:
+    '''GUI for calculating photometry for a ground observatory'''
     def __init__(self):
         self.root = tk.Tk()
         self.root.title('Photometry Calculations')
@@ -29,7 +30,7 @@ class MyGUI:
                               padx=PADX, pady=PADY)
         # Make a dictionary for sensor properties. Value will be a list,
         # where the first element is the string for the label, the second
-        # is the tkinter label itself, the third is the tkinter variable, and the
+        # is the tkinter label, the third is the tkinter variable, and the
         # fourth is the tkinter entry box.
         self.sens_options = list(sensor_dict_lightspeed.keys())
         self.sens_vars = {'name': ['Select Sensor'],
@@ -66,7 +67,6 @@ class MyGUI:
         self.tele_header.grid(row=8, column=0, columnspan=2, padx=PADX,
                               pady=PADY)
         # Similarly, make a dictionary for telescope properties.
-        # ZZZ NEED TO FIGURE OUT WHAT CHANGED TO MAKE RESULTS SLIGHTLY DIFFERENT
         self.tele_options = list(telescope_dict_lightspeed.keys())
         self.tele_vars = {'name': ['Select Telescope'],
                                'diam': ['Diameter (cm)'],
@@ -107,7 +107,8 @@ class MyGUI:
                               'seeing': ['Seeing (arcsec)'],
                               'zo': ['Object Zenith Angle (deg)'],
                               'alpha': ['Lunar Phase (deg)'],
-                              'rho': ['Object-Moon Separation (deg)']}
+                              'rho': ['Object-Moon Separation (deg)'],
+                              'aper_rad': ['Aper Radius (pix) (\'None\' for optimal)']}
         for i, (key, value) in enumerate(self.obs_vars_dict.items()):
             if key == 'filter':
                 value.append(tk.Label(self.root, text=value[0]))
@@ -120,12 +121,15 @@ class MyGUI:
             else:
                 value.append(tk.Label(self.root, text=value[0]))
                 value[1].grid(row=i+1, column=2, padx=PADX, pady=PADY)
-                value.append(tk.DoubleVar())
+                if key == 'aper_rad':
+                    value.append(tk.StringVar())
+                else:
+                    value.append(tk.DoubleVar())
                 value[2].trace_add('write', self.clear_results)
                 value.append(tk.Entry(self.root, width=10, textvariable=value[2]))
                 value[3].grid(row=i+1, column=3, padx=PADX, pady=PADY)
 
-        # Initializing labels that display results
+        # Initializing labels that display basic results
         self.results_header = tk.Label(self.root, text='General Results',
                                        font=['Arial', 16, 'bold'])
         self.results_header.grid(row=0, column=4, columnspan=1, padx=PADX,
@@ -136,20 +140,22 @@ class MyGUI:
                                     command=self.run_calcs)
         self.run_button_1.grid(row=0, column=5, columnspan=1, padx=PADX,
                              pady=PADY)
-
-        self.results_labels = []
-        results_label_names = ['Pixel Scale (arcsec/pix)',
-                               'Pivot Wavelength (nm)',
-                               'PSF FWHM (arcsec)',
-                               'Central Pixel Ensquared Energy',
-                               'A_eff at Pivot Wavelength (cm^2)', 'Limiting AB magnitude',
-                               'Saturating AB magnitude', 'Airmass']
-        self.results_data = []
-        for i, name in enumerate(results_label_names):
-            self.results_labels.append(tk.Label(self.root, text=name))
-            self.results_labels[i].grid(row=i+1, column=4, padx=PADX, pady=PADY)
-            self.results_data.append(tk.Label(self.root, fg='red'))
-            self.results_data[i].grid(row=i+1, column=5, padx=PADX, pady=PADY)
+        # Make dictionary for results parameters.
+        self.basic_results = {'pix_scale': ['Pixel Scale (arcsec/pix)'],
+                              'lambda_pivot': ['Pivot Wavelength (nm)'],
+                              'psf_fwhm': ['PSF FWHM (arcsec)'],
+                              'central_pix_frac': ['Central Pixel Ensquared Energy'],
+                              'eff_area_pivot': ['A_eff at Pivot Wavelength (cm^2)'],
+                              'limiting_mag': ['Limiting AB magnitude'],
+                              'saturating_mag': ['Saturating AB magnitude'],
+                              'airmass': ['Airmass'],
+                              'exptime_turnover': ['t_exp where bkg noise = read noise (s)']}
+        for i, (key, value) in enumerate(self.basic_results.items()):
+            value.append(tk.Label(self.root, text=value[0]))
+            value[1].grid(row=i+1, column=4, padx=PADX, pady=PADY)
+            value.append(tk.DoubleVar())
+            value.append(tk.Label(self.root, fg='red'))
+            value[3].grid(row=i+1, column=5, padx=PADX, pady=PADY)
 
         # Set a spectrum to observe
         self.spectrum_header = tk.Label(self.root, text='Spectrum Observation',
@@ -161,7 +167,7 @@ class MyGUI:
                                     command=self.run_observation)
         self.run_button_2.grid(row=0, column=7, columnspan=1, padx=PADX,
                              pady=PADY)
-
+                              
         self.flat_spec_bool = tk.BooleanVar(value=True)
         self.flat_spec_check = tk.Checkbutton(self.root,
                                               text='Flat spectrum at AB mag',
@@ -207,8 +213,8 @@ class MyGUI:
 
         self.spec_results_labels = []
         spec_results_label_names = ['Signal (e-)', 'Total Noise (e-)', 'SNR',
-                                    'Photometric Precision (ppm)', 'Optimal Aperture Size (pix)',
-                                    'Noise Breakdown', 'Turnover Exposure Time (s)']
+                                    'Photometric Precision (ppm)', 'Aperture Size (pix)',
+                                    'Noise Breakdown']
         self.spec_results_data = []
         for i, name in enumerate(spec_results_label_names):
             self.spec_results_labels.append(tk.Label(self.root, text=name))
@@ -221,7 +227,7 @@ class MyGUI:
         # Make a button to plot mag vs noise
         self.plot_button = tk.Button(self.root, text='Plot Magnitude vs. Photometric Precision',
                                     command=self.plot_mag_vs_noise, fg='green')
-        self.plot_button.grid(row=9, column=4, columnspan=2, padx=PADX,
+        self.plot_button.grid(row=10, column=4, columnspan=2, padx=PADX,
                               pady=PADY)
         # Set default values
         self.sens = sensor_dict_lightspeed['qCMOS']
@@ -236,11 +242,13 @@ class MyGUI:
         self.obs_vars_dict['zo'][2].set(0.0)
         self.obs_vars_dict['alpha'][2].set(180)
         self.obs_vars_dict['rho'][2].set(45)
+        self.obs_vars_dict['aper_rad'][2].set('None')
         self.root.mainloop()
 
     def clear_results(self, *args):
         '''Clear results when a new sensor or telescope is selected'''
-        for label in self.results_data:
+        labels = [value[3] for value in self.basic_results.values()]
+        for label in labels:
             label.config(text='')
         for label in self.spec_results_data:
             label.config(text='')
@@ -329,6 +337,8 @@ class MyGUI:
         obs_altitude = self.tele_vars['altitude'][2].get()
         obs_alpha = self.obs_vars_dict['alpha'][2].get()
         obs_rho = self.obs_vars_dict['rho'][2].get()
+        obs_aper_rad = self.obs_vars_dict['aper_rad'][2].get()
+        obs_aper_rad = None if str(obs_aper_rad) == 'None' else obs_aper_rad
         observatory = GroundObservatory(sens, tele, exposure_time=exposure_time,
                                         num_exposures=num_exposures,
                                         limiting_s_n=limiting_snr,
@@ -336,7 +346,8 @@ class MyGUI:
                                         seeing=seeing_arcsec,
                                         zo=obs_zo, rho=obs_rho,
                                         altitude=obs_altitude,
-                                        alpha=obs_alpha)
+                                        alpha=obs_alpha,
+                                        aper_radius=obs_aper_rad)
         return observatory
 
     def set_spectrum(self):
@@ -367,18 +378,20 @@ class MyGUI:
             observatory = self.set_obs()
             limiting_mag = observatory.limiting_mag()
             saturating_mag = observatory.saturating_mag()
-
-            self.results_data[0].config(text=format(observatory.pix_scale, '4.3f'))
-            self.results_data[1].config(text=format(observatory.lambda_pivot / 10, '4.1f'))
-            psf_fwhm_arcsec = (observatory.psf_fwhm_um() * observatory.pix_scale /
-                               observatory.sensor.pix_size)
-            self.results_data[2].config(text=format(psf_fwhm_arcsec, '4.3f'))
-            self.results_data[3].config(text=format(100 * observatory.central_pix_frac(),
-                                                    '4.1f') + '%')
-            self.results_data[4].config(text=format(observatory.eff_area_pivot(), '4.2f'))
-            self.results_data[5].config(text=format(limiting_mag, '4.3f'))
-            self.results_data[6].config(text=format(saturating_mag, '4.3f'))
-            self.results_data[7].config(text=format(observatory.airmass, '4.3f'))
+            turnover_exp_time = observatory.turnover_exp_time()
+            self.basic_results['pix_scale'][2] = observatory.pix_scale
+            self.basic_results['lambda_pivot'][2] = observatory.lambda_pivot
+            fwhm_arcsec = (observatory.psf_fwhm_um() * observatory.pix_scale /
+                           observatory.sensor.pix_size)
+            self.basic_results['psf_fwhm'][2] = fwhm_arcsec
+            self.basic_results['central_pix_frac'][2] = observatory.central_pix_frac() * 100
+            self.basic_results['eff_area_pivot'][2] = observatory.eff_area_pivot()
+            self.basic_results['limiting_mag'][2] = limiting_mag
+            self.basic_results['saturating_mag'][2] = saturating_mag
+            self.basic_results['airmass'][2] = observatory.airmass
+            self.basic_results['exptime_turnover'][2] = turnover_exp_time
+            for key, value in self.basic_results.items():
+                value[3].config(text=format(value[2], '4.3f'))
         except ValueError as inst:
             messagebox.showerror('Value Error', inst)
 
@@ -392,7 +405,6 @@ class MyGUI:
             noise = int(results['tot_noise'])
             snr = results['signal'] / results['tot_noise']
             phot_prec = 10 ** 6 / snr
-            turnover_exp_time = observatory.turnover_exp_time(spectrum)
             self.spec_results_data[0].config(text=format(signal, '4d'))
             self.spec_results_data[1].config(text=format(noise, '4d'))
             self.spec_results_data[2].config(text=format(snr, '4.3f'))
@@ -404,8 +416,6 @@ class MyGUI:
                          '\nBackground noise: ' + format(results['bkg_noise'], '.2f') +
                          '\nScintillation noise: ' + format(results['scint_noise'], '.2f'))
             self.spec_results_data[5].config(text=noise_str)
-            self.spec_results_data[6]. config(text=format(turnover_exp_time, '4.3f'))
-
         except ValueError as inst:
             messagebox.showerror('Value Error', inst)
 

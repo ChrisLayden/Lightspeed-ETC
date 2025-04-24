@@ -179,7 +179,7 @@ class Observatory(object):
     def __init__(
             self, sensor, telescope, filter_bandpass=S.UniformTransmission(1.0),
             exposure_time=1., num_exposures=1, eclip_lat=90,
-            limiting_s_n=5.):
+            limiting_s_n=5., aper_radius=None):
 
         '''Initialize Observatory class attributes.
 
@@ -199,6 +199,9 @@ class Observatory(object):
             The ecliptic latitude of the target, in degrees.
         limiting_s_n: float
             The signal-to-noise ratio constituting a detection.
+        aper_radius: int
+            The radius of the aperture used for photometry, in pixels. 
+            If not specified, the optimal aperture is calculated. ZZZ not used yet
         '''
 
         self.sensor = sensor
@@ -223,6 +226,7 @@ class Observatory(object):
         self.limiting_s_n = limiting_s_n
         plate_scale = 206265 / (self.telescope.focal_length * 10**4)
         self.pix_scale = plate_scale * self.sensor.pix_size
+        self.aper_radius = int(aper_radius) if aper_radius is not None else None
 
     def binset(self, spectrum):
         '''Narrowest binset from telescope, sensor, filter, and spectrum.'''
@@ -315,21 +319,6 @@ class Observatory(object):
                         )
         return noise
 
-    def single_pix_snr(self, spectrum):
-        '''The SNR for a given source with a single-pixel aperature.
-
-        Parameters
-        ----------
-        spectrum: pysynphot.spectrum object
-            The spectrum for which to calculate the SNR.
-        '''
-
-        signal = self.single_pix_signal(spectrum)
-        noise = np.sqrt(signal + self.single_pix_noise() ** 2)
-        exposure_snr = signal / noise
-        stack_snr = exposure_snr * np.sqrt(self.num_exposures)
-        return stack_snr
-
     def limiting_mag(self, eps=0.05):
         '''Get the limiting AB magnitude for the observatory parameters.'''
         mag = 10
@@ -348,44 +337,6 @@ class Observatory(object):
         if i == 10:
             raise ValueError("Limiting magnitude not found within 10 iterations.")
         return mag
-
-
-    # def limiting_mag(self):
-    #     '''The limiting AB magnitude for the observatory.'''
-    #     # We use an aperture of just 1 pixel, as this is the optimal
-    #     # aperture for very dark objects, especially for an undersampled
-    #     # system.
-    #     mag_10_spectrum = S.FlatSpectrum(10, fluxunits='abmag')
-    #     mag_10_spectrum.convert('fnu')
-    #     mag_10_signal = self.single_pix_signal(mag_10_spectrum)
-    #     pix_noise = self.single_pix_noise()
-
-    #     def s_n_diff_mag(mag):
-    #         '''The difference between the S/N at mag and the limiting S/N.'''
-    #         signal = mag_10_signal * 10 ** ((10 - mag) / 2.5)
-    #         noise = np.sqrt(signal + pix_noise ** 2)
-    #         snr = signal / noise * np.sqrt(self.num_exposures)
-    #         return snr - self.limiting_s_n
-
-    #     # Newton-Raphson method for root-finding
-    #     mag_tol, s_n_tol = 0.01, 0.01
-    #     i = 1
-    #     mag = 15
-    #     mag_deriv_step = 0.01
-    #     eps_mag = 1
-    #     eps_s_n = s_n_diff_mag(mag)
-    #     while abs(eps_s_n) > s_n_tol:
-    #         if abs(eps_mag) < mag_tol:
-    #             raise RuntimeError('No convergence to within 0.01 mag.')
-    #         elif i > 20:
-    #             raise RuntimeError('No convergence after 20 iterations.')
-    #         eps_s_n_prime = ((s_n_diff_mag(mag + mag_deriv_step) - eps_s_n) /
-    #                          mag_deriv_step)
-    #         eps_mag = eps_s_n / eps_s_n_prime
-    #         mag -= eps_mag
-    #         eps_s_n = s_n_diff_mag(mag)
-    #         i += 1
-    #     return mag
 
     def saturating_mag(self):
         '''The saturating AB magnitude for the observatory.'''
@@ -500,7 +451,7 @@ class Observatory(object):
         relative_signal_grid /= np.max(relative_signal_grid)
         return relative_signal_grid
 
-    def get_opt_aper(self, spectrum, pos=np.array([0, 0]), img_size=11,
+    def get_opt_aper(self, spectrum=None, pos=np.array([0, 0]), img_size=11,
                      resolution=11):
         '''Find the optimal aperture for a given point source.
         
@@ -517,23 +468,40 @@ class Observatory(object):
         resolution: int (default 11)
             The number of sub-pixels per pixel.
         '''
-
-        aper_found = False
-        while not aper_found:
-            if img_size >= 50:
-                raise ValueError('Subgrid is too large (>50x50 pixels).')
-            initial_grid = self.signal_grid_fine(spectrum, pos, img_size, resolution)
-            frame = initial_grid.reshape((img_size, resolution, img_size,
-                                          resolution)).sum(axis=(1, 3))
-            optimal_aper = psfs.get_optimal_aperture(frame, self.single_pix_noise())
-            # Get the number of non-aperture pixels around the aperture to check
-            # that the full optimal aperture is found.
-            aper_pads = psfs.get_aper_padding(optimal_aper)
-            if np.min(aper_pads) == 0:
-                img_size += 2
-            else:
-                aper_found = True
-        return optimal_aper
+        if self.aper_radius is not None:
+            # Make an aperture with the specified radius on the subarray,
+            # centered on the central pixel.
+            img_size = np.max([self.aper_radius * 2 + 3, img_size])
+            aper = np.zeros((img_size, img_size))
+            # For pixels within a distance of aper_radius from the center,
+            # set the pixel value to 1.
+            # Get an array of pixel distances from the center
+            x = np.arange(img_size) - img_size // 2
+            y = np.arange(img_size) - img_size // 2
+            x, y = np.meshgrid(x, y)
+            pix_distances = np.sqrt(x ** 2 + y ** 2)
+            # Array of 1s and 0s, where 1 is within the aperture radius
+            aper[pix_distances <= self.aper_radius] = 1
+            return aper
+        else:
+            if spectrum is None:
+                raise ValueError('Spectrum must be specified to find the optimal aperture.')
+            aper_found = False
+            while not aper_found:
+                if img_size >= 50:
+                    raise ValueError('Subgrid is too large (>50x50 pixels).')
+                initial_grid = self.signal_grid_fine(spectrum, pos, img_size, resolution)
+                frame = initial_grid.reshape((img_size, resolution, img_size,
+                                            resolution)).sum(axis=(1, 3))
+                optimal_aper = psfs.get_optimal_aperture(frame, self.single_pix_noise())
+                # Get the number of non-aperture pixels around the aperture to check
+                # that the full optimal aperture is found.
+                aper_pads = psfs.get_aper_padding(optimal_aper)
+                if np.min(aper_pads) == 0:
+                    img_size += 2
+                else:
+                    aper_found = True
+            return optimal_aper
 
     def observe(self, spectrum, pos=np.array([0, 0]), img_size=11, resolution=11):
         '''Determine the signal and noise for observation of a point source.
@@ -670,8 +638,8 @@ if __name__ == '__main__':
     flat_spec.convert('fnu')
     tess_geo_obs = Observatory(telescope=mono_tele_v10uvs, sensor=imx455,
                                filter_bandpass=r_bandpass, eclip_lat=90,
-                               exposure_time=1, num_exposures=6)
+                               exposure_time=1, num_exposures=6, aper_radius=None)
     results = tess_geo_obs.observe(flat_spec, img_size=11, resolution=21)
     test_image, aper = tess_geo_obs.get_images(flat_spec, img_size=11,
-                                                   resolution=21, num_images=1)
+                                               resolution=21, num_images=1)
     print(results)
