@@ -22,7 +22,7 @@ cosmos = Sensor(pix_size=10, read_noise=1.0, dark_current=0.005, full_well=80000
 
 qcmos_arr = np.genfromtxt(data_folder + 'qCMOS_QE.csv', delimiter=',')
 qcmos_qe = S.ArrayBandpass(qcmos_arr[:, 0] * 10, qcmos_arr[:, 1])
-qcmos = Sensor(pix_size=4.6, read_noise=0.29, dark_current=0.006, full_well=7000,
+qcmos = Sensor(pix_size=4.6, read_noise=0.29, dark_current=0.004, full_well=7000,
                qe=qcmos_qe)
 
 basic_sensor = Sensor(pix_size=10, read_noise=10, dark_current=0.01,
@@ -91,6 +91,10 @@ sloan_zprime = np.genfromtxt(data_folder + 'SLOAN_SDSS.zprime_filter.dat',
                              delimiter='\t')
 sloan_zprime = S.ArrayBandpass(sloan_zprime[:, 0], sloan_zprime[:, 1])
 
+# Bandpass representing transmission through the atmosphere at airmass 1
+atmo_bandpass = np.genfromtxt(data_folder + 'atmo_transmission_airmass1.csv',
+                              delimiter=',')
+atmo_bandpass = S.ArrayBandpass(atmo_bandpass[:, 0] * 10, atmo_bandpass[:, 1])
 
 # Array with uniform total transmission 4000-7000 ang
 vis_wave = np.arange(4000, 7000, 100)

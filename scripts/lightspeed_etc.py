@@ -1,6 +1,7 @@
 '''GUI for calculating photometry for a ground observatory'''
 
 import os
+import copy
 import tkinter as tk
 from tkinter import messagebox
 import pysynphot as S
@@ -9,7 +10,7 @@ import matplotlib.pyplot as plt
 from spectra import *
 from observatory import Sensor, Telescope, Observatory
 from ground_observatory import GroundObservatory
-from instruments import sensor_dict_lightspeed, telescope_dict_lightspeed, filter_dict_lightspeed
+from instruments import sensor_dict_lightspeed, telescope_dict_lightspeed, filter_dict_lightspeed, atmo_bandpass
 
 data_folder = os.path.dirname(__file__) + '/../data/'
 
@@ -56,15 +57,10 @@ class MyGUI:
                 value.append(tk.Entry(self.root, width=10, textvariable=value[2]))
                 value[3].grid(row=i+1, column=1, padx=PADX, pady=PADY)
 
-        self.plot_qe_button = tk.Button(self.root, text='Plot QE vs. Lambda',
-                                    command=self.plot_qe, fg='green')
-        self.plot_qe_button.grid(row=7, column=0, columnspan=2, padx=PADX,
-                                 pady=PADY)
-
         # Defining telescope properties
         self.tele_header = tk.Label(self.root, text='Telescope Properties',
                                     font=['Arial', 16, 'bold'])
-        self.tele_header.grid(row=8, column=0, columnspan=2, padx=PADX,
+        self.tele_header.grid(row=7, column=0, columnspan=2, padx=PADX,
                               pady=PADY)
         # Similarly, make a dictionary for telescope properties.
         self.tele_options = list(telescope_dict_lightspeed.keys())
@@ -76,21 +72,21 @@ class MyGUI:
         for i, (key, value) in enumerate(self.tele_vars.items()):
             if key == 'name':
                 value.append(tk.Label(self.root, text=value[0]))
-                value[1].grid(row=i+9, column=0, padx=PADX, pady=PADY)
+                value[1].grid(row=i+8, column=0, padx=PADX, pady=PADY)
                 value.append(tk.StringVar())
                 value[2].trace_add('write', self.set_tele)
                 value[2].trace_add('write', self.clear_results)
                 value[2].trace_add('write', self.update_altitude)
                 value[2].trace_add('write', self.update_reimaging_throughput)
                 value.append(tk.OptionMenu(self.root, value[2], *self.tele_options))
-                value[3].grid(row=i+9, column=1, padx=PADX, pady=PADY)
+                value[3].grid(row=i+8, column=1, padx=PADX, pady=PADY)
             else:
                 value.append(tk.Label(self.root, text=value[0]))
-                value[1].grid(row=i+9, column=0, padx=PADX, pady=PADY)
+                value[1].grid(row=i+8, column=0, padx=PADX, pady=PADY)
                 value.append(tk.DoubleVar())
                 value[2].trace_add('write', self.clear_results)
                 value.append(tk.Entry(self.root, width=10, textvariable=value[2]))
-                value[3].grid(row=i+9, column=1, padx=PADX, pady=PADY)
+                value[3].grid(row=i+8, column=1, padx=PADX, pady=PADY)
 
         # Defining observing properties
         self.obs_header = tk.Label(self.root, text='Observing Properties',
@@ -129,6 +125,11 @@ class MyGUI:
                 value.append(tk.Entry(self.root, width=10, textvariable=value[2]))
                 value[3].grid(row=i+1, column=3, padx=PADX, pady=PADY)
 
+        self.plot_trans_button = tk.Button(self.root, text='Plot Transmission',
+                                    command=self.plot_trans, fg='green')
+        self.plot_trans_button.grid(row=i+2, column=2, columnspan=2, padx=PADX,
+                                 pady=PADY)
+
         # Initializing labels that display basic results
         self.results_header = tk.Label(self.root, text='General Results',
                                        font=['Arial', 16, 'bold'])
@@ -142,9 +143,9 @@ class MyGUI:
                              pady=PADY)
         # Make dictionary for results parameters.
         self.basic_results = {'pix_scale': ['Pixel Scale (arcsec/pix)'],
-                              'lambda_pivot': ['Pivot Wavelength (nm)'],
+                              'lambda_pivot': ['Pivot Wavelength (Angstrom)'],
                               'psf_fwhm': ['PSF FWHM (arcsec)'],
-                              'central_pix_frac': ['Central Pixel Ensquared Energy'],
+                              'central_pix_frac': ['Central Pixel Ensquared Energy (%)'],
                               'eff_area_pivot': ['A_eff at Pivot Wavelength (cm^2)'],
                               'limiting_mag': ['Limiting AB magnitude'],
                               'saturating_mag': ['Saturating AB magnitude'],
@@ -324,7 +325,8 @@ class MyGUI:
         limiting_snr = self.obs_vars_dict['limiting_snr'][2].get()
         filter_bp = filter_dict_lightspeed[self.obs_vars_dict['filter'][2].get()]
         reimaging_throughput = self.obs_vars_dict['reim_throughput'][2].get()
-        filter_bp = S.UniformTransmission(reimaging_throughput) * filter_bp
+        reimaging_bp = S.UniformTransmission(reimaging_throughput)
+        total_filter_bp = filter_bp * reimaging_bp
         seeing_arcsec = self.obs_vars_dict['seeing'][2].get()
         obs_zo = self.obs_vars_dict['zo'][2].get()
         obs_altitude = self.tele_vars['altitude'][2].get()
@@ -335,7 +337,7 @@ class MyGUI:
         observatory = GroundObservatory(sens, tele, exposure_time=exposure_time,
                                         num_exposures=num_exposures,
                                         limiting_s_n=limiting_snr,
-                                        filter_bandpass=filter_bp,
+                                        filter_bandpass=total_filter_bp,
                                         seeing=seeing_arcsec,
                                         zo=obs_zo, rho=obs_rho,
                                         altitude=obs_altitude,
@@ -412,18 +414,30 @@ class MyGUI:
         except ValueError as inst:
             messagebox.showerror('Value Error', inst)
 
-    def plot_qe(self):
-        '''Plot the quantum efficiency of the sensor.'''
-        qe = self.sens.qe
-        # Check if uniform transmission
-        if isinstance(qe, S.UniformTransmission):
-            wave = np.linspace(200, 1000, 100)
-            throughput = np.ones_like(wave) * self.sens_vars['qe'][2].get()
-            plt.plot(wave, throughput * 100)
-        else:
-            plt.plot(qe.wave / 10, qe.throughput * 100)
+    def plot_trans(self):
+        '''Plot the transmission of the instrument.'''
+        obs = self.set_obs()
+        sens_bp = obs.sensor.qe
+        tele_bp = obs.telescope.bandpass
+        filter_bp = filter_dict_lightspeed[self.obs_vars_dict['filter'][2].get()]
+        reimaging_throughput = self.obs_vars_dict['reim_throughput'][2].get()
+        reimaging_bp = S.UniformTransmission(reimaging_throughput)
+        atmo_throughput_with_airmass = atmo_bandpass.throughput ** obs.airmass
+        atmo_bp = S.ArrayBandpass(atmo_bandpass.wave, atmo_throughput_with_airmass)
+        total_bp = (sens_bp * filter_bp * reimaging_bp * tele_bp * atmo_bp)
+        bps_to_plot = [sens_bp, filter_bp, reimaging_bp, tele_bp, atmo_bp, total_bp]
+        bp_names = ['Sensor QE', 'Filter', 'Reimaging Optics', 'Telescope', 'Atmosphere', 'Total']
+        linestyles = ['--', '--', ':', ':', '-.', '-']
+        for bp, name, ls in zip(bps_to_plot, bp_names, linestyles):
+            if isinstance(bp, S.UniformTransmission):
+                wave = np.linspace(200, 1000, 100)
+                throughput = np.ones_like(wave) * bp.throughput
+                plt.plot(wave, throughput * 100, ls, label=name)
+            else:
+                plt.plot(bp.wave / 10, bp.throughput * 100, ls, label=name)
+        plt.legend()
         plt.xlabel('Wavelength (nm)')
-        plt.ylabel('Quantum Efficiency (%)')
+        plt.ylabel('Transmission (%)')
         plt.show()
 
     def plot_mag_vs_noise(self):

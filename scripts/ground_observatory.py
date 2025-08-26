@@ -14,6 +14,7 @@ import os
 import numpy as np
 import pysynphot as S
 from observatory import Observatory, Sensor, Telescope
+from instruments import atmo_bandpass
 from sky_background import bkg_spectrum_ground
 import psfs
 
@@ -74,6 +75,10 @@ class GroundObservatory(Observatory):
         self.zo = zo
         # Formula 3 in Krisciunas & Schaefer 1991 for airmass.
         self.airmass = (1 - 0.96 * np.sin(np.radians(zo)) ** 2) ** -0.5
+        atmo_throughput_with_airmass = atmo_bandpass.throughput ** self.airmass
+        atmo_bp = S.ArrayBandpass(atmo_bandpass.wave, atmo_throughput_with_airmass)
+        self.bandpass = (filter_bandpass * self.telescope.bandpass *
+                         self.sensor.qe * atmo_bp)
         self.rho = rho
         # The zenith angle of the moon, in degrees.
         self.zm = zo - rho
