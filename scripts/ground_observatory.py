@@ -75,6 +75,7 @@ class GroundObservatory(Observatory):
         self.zo = zo
         # Formula 3 in Krisciunas & Schaefer 1991 for airmass.
         self.airmass = (1 - 0.96 * np.sin(np.radians(zo)) ** 2) ** -0.5
+        # atmospheric transmission from https://arxiv.org/pdf/0708.1364
         atmo_throughput_with_airmass = atmo_bandpass.throughput ** self.airmass
         atmo_bp = S.ArrayBandpass(atmo_bandpass.wave, atmo_throughput_with_airmass)
         self.bandpass = (filter_bandpass * self.telescope.bandpass *
