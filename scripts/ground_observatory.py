@@ -12,7 +12,9 @@ GroundObservatory
 
 import os
 import numpy as np
-import pysynphot as S
+from synphot import SpectralElement, SourceSpectrum, ConstFlux1D, Empirical1D
+import astropy.units as u
+from synphot.units import FLAM
 from observatory import Observatory, Sensor, Telescope
 from instruments import atmo_bandpass
 from sky_background import bkg_spectrum_ground
@@ -21,7 +23,7 @@ import psfs
 class GroundObservatory(Observatory):
     '''A class for ground-based observatories, inheriting from Observatory.'''
 
-    def __init__(self, sensor, telescope, filter_bandpass=S.UniformTransmission(1.0),
+    def __init__(self, sensor, telescope, filter_bandpass=None,
                  exposure_time=1., num_exposures=1, seeing=1.0,
                  limiting_s_n=5., altitude=0, alpha=180, zo=0, rho=45,
                  aper_radius=None):
@@ -33,7 +35,7 @@ class GroundObservatory(Observatory):
             The sensor object to be used for observations.
         telescope: Telescope
             The telescope object to be used for observations.
-        filter_bandpass: pysynphot.spectrum object
+        filter_bandpass: synphot.SpectralElement object
             The bandpass filter to be used for observations.
         exposure_time: float
             The exposure time for observations, in seconds.
@@ -60,6 +62,8 @@ class GroundObservatory(Observatory):
             The radius of the aperture, in pixels. If None, the optimal
             aperture will be calculated.
         '''
+        if filter_bandpass is None:
+            filter_bandpass = SpectralElement(ConstFlux1D, amplitude=1.0)
 
         super().__init__(sensor=sensor, telescope=telescope,
                          filter_bandpass=filter_bandpass,
@@ -76,8 +80,12 @@ class GroundObservatory(Observatory):
         # Formula 3 in Krisciunas & Schaefer 1991 for airmass.
         self.airmass = (1 - 0.96 * np.sin(np.radians(zo)) ** 2) ** -0.5
         # atmospheric transmission from https://arxiv.org/pdf/0708.1364
-        atmo_throughput_with_airmass = atmo_bandpass.throughput ** self.airmass
-        atmo_bp = S.ArrayBandpass(atmo_bandpass.wave, atmo_throughput_with_airmass)
+        # Get wavelengths and throughput values from atmo_bandpass
+        wavelengths = atmo_bandpass.waveset
+        throughput_values = atmo_bandpass(wavelengths)
+        atmo_throughput_with_airmass = throughput_values ** self.airmass
+        atmo_bp = SpectralElement(Empirical1D, points=wavelengths,
+                                lookup_table=atmo_throughput_with_airmass)
         self.bandpass = (filter_bandpass * self.telescope.bandpass *
                          self.sensor.qe * atmo_bp)
         self.rho = rho
@@ -110,7 +118,8 @@ class GroundObservatory(Observatory):
         bkg_wave, bkg_ilam = bkg_spectrum_ground(alpha=self.alpha, rho=self.rho,
                                                  Zm=self.zm, Zo=self.zo,)
         bkg_flam = bkg_ilam * self.pix_scale ** 2
-        bkg_sp = S.ArraySpectrum(bkg_wave, bkg_flam, fluxunits='flam')
+        bkg_sp = SourceSpectrum(Empirical1D, points=bkg_wave * u.AA,
+                              lookup_table=bkg_flam * FLAM)
         bkg_signal = self.tot_signal(bkg_sp)
         return bkg_signal
 
@@ -125,7 +134,7 @@ class GroundObservatory(Observatory):
         
         Parameters
         ----------
-        spectrum: pysynphot.spectrum object
+        spectrum: synphot.SourceSpectrum object
             The spectrum of the point source to observe.
         pos: array-like (default [0, 0])
             The centroid position of the source on the central pixel,
@@ -182,7 +191,7 @@ class GroundObservatory(Observatory):
 
         Parameters
         ----------
-        spectrum: pysynphot.spectrum object
+        spectrum: synphot.SourceSpectrum object
             The spectrum for which to calculate the intensity grid.
         pos: array-like (default [0, 0])
             The centroid position of the source on the subarray, in
@@ -239,7 +248,7 @@ class GroundObservatory(Observatory):
 
 if __name__ == '__main__':
     data_folder = os.path.dirname(__file__) + '/../data/'
-    sensor_bandpass = S.FileBandpass(data_folder + 'imx455.fits')
+    sensor_bandpass = SpectralElement.from_file(data_folder + 'imx455.fits')
     imx455 = Sensor(pix_size=2.74, read_noise=1, dark_current=0.005,
                     full_well=51000, qe=sensor_bandpass,
                     intrapix_sigma=6)
@@ -248,5 +257,5 @@ if __name__ == '__main__':
                                  altitude=2, exposure_time=0.1,
                                  seeing=0.5, alpha=180, zo=0, rho=45,
                                  aper_radius=10)
-    my_spectrum = S.FlatSpectrum(20, fluxunits='abmag')
+    my_spectrum = SourceSpectrum(ConstFlux1D, amplitude=20 * u.ABmag)
     print(magellan.observe(my_spectrum))

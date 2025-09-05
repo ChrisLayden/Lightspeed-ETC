@@ -14,8 +14,14 @@ import os
 import warnings
 import psfs
 import numpy as np
-import pysynphot as S
+from synphot import SpectralElement, SourceSpectrum, Observation, ConstFlux1D, Empirical1D
+from synphot.models import ConstFlux1D as ConstFluxModel
+from synphot import units
+import astropy.units as u
+from astropy.modeling import Model
 from sky_background import bkg_spectrum_space
+
+warnings.filterwarnings("ignore", category=UserWarning, module="synphot.observation")
 
 def shift_values(arr, del_x, del_y):
     '''Shift values in an array by a specified discrete displacement.
@@ -53,15 +59,15 @@ class Sensor(object):
     dark_current: float
         Dark current at the sensor operating temperature,
         in e-/pix/s
-    qe: pysynphot.bandpass object
+    qe: synphot.SpectralElement object
         The sensor quantum efficiency as a function of wavelength
     full_well: int
         The full well (in e-) of each sensor pixel.
     '''
 
     def __init__(self, pix_size, read_noise, dark_current,
-                 qe=S.UniformTransmission(1), full_well=100000,
-                 intrapix_sigma=np.inf):
+                 qe=None,
+                 full_well=100000, intrapix_sigma=np.inf):
         '''Initialize a Sensor object.
 
         Parameters
@@ -72,7 +78,7 @@ class Sensor(object):
             Read noise per pixel, in e-/pix
         dark_current: float
             Dark current at -25 degC, in e-/pix/s
-        qe: pysynphot.bandpass object
+        qe: synphot.SpectralElement object
             The sensor quantum efficiency as a function of wavelength
         full_well: int
             The full well (in e-) of each sensor pixel.
@@ -82,7 +88,9 @@ class Sensor(object):
             response as a Gaussian. If not specified, the intrapixel
             response is assumed to be flat (so intrapix_sigma is infinite).
         '''
-
+        if qe is None:
+            qe = SpectralElement(ConstFlux1D, amplitude=1.0)
+        
         self.pix_size = pix_size
         self.read_noise = read_noise
         self.dark_current = dark_current
@@ -100,9 +108,9 @@ class Sensor(object):
         if isinstance(value, float) or isinstance(value, int):
             if value < 0:
                 raise ValueError('The quantum efficiency must be positive.')
-            self._qe = S.UniformTransmission(value)
-        elif not isinstance(value, S.spectrum.SpectralElement):
-            raise ValueError('Quantum efficiency must be constant or pysynphot bandpass object.')
+            self._qe = SpectralElement(ConstFlux1D, amplitude=value)
+        elif not isinstance(value, SpectralElement):
+            raise ValueError('Quantum efficiency must be constant or synphot SpectralElement object.')
         else:
             self._qe = value
 
@@ -116,7 +124,7 @@ class Telescope(object):
         Diameter of the primary aperture, in cm
     f_num: float
         Ratio of the focal length to diam
-    bandpass: pysynphot.bandpass object
+    bandpass: synphot.SpectralElement object
         The telescope bandpass as a function of wavelength,
         accounting for throughput and any geometric blocking
         factor
@@ -126,7 +134,7 @@ class Telescope(object):
         The focal plate scale, in um/arcsec
     '''
     def __init__(self, diam, f_num, psf_type='airy', fwhm=None,
-                 bandpass=S.UniformTransmission(1.0)):
+                 bandpass=None):
         '''Initializing a telescope object.
 
         Parameters
@@ -139,13 +147,15 @@ class Telescope(object):
             The name of the PSF to use. Options are 'airy' and 'gaussian'.
         fwhm: float
             The FWHM of the psf, in arcsec. Only used if psf_type is 'gaussian'.
-        bandpass: pysynphot.bandpass object
+        bandpass: synphot.SpectralElement object
             The telescope bandpass as a function of wavelength,
             accounting for throughput and any geometric blocking
             factor
 
         '''
-
+        if bandpass is None:
+            bandpass = SpectralElement(ConstFlux1D, amplitude=1.0)
+            
         self.diam = diam
         self.f_num = f_num
         self.bandpass = bandpass
@@ -166,9 +176,9 @@ class Telescope(object):
         if isinstance(value, float) or isinstance(value, int):
             if value < 0:
                 raise ValueError('The quantum efficiency must be positive.')
-            self._bandpass = S.UniformTransmission(value)
-        elif not isinstance(value, S.spectrum.SpectralElement):
-            raise ValueError('The bandpass must be a constant or a pysynphot bandpass object.')
+            self._bandpass = SpectralElement(ConstFlux1D, amplitude=value)
+        elif not isinstance(value, SpectralElement):
+            raise ValueError('The bandpass must be a constant or a synphot SpectralElement object.')
         else:
             self._bandpass = value
 
@@ -177,7 +187,7 @@ class Observatory(object):
     '''Class specifying a complete observatory.'''
 
     def __init__(
-            self, sensor, telescope, filter_bandpass=S.UniformTransmission(1.0),
+            self, sensor, telescope, filter_bandpass=None,
             exposure_time=1., num_exposures=1, eclip_lat=90,
             limiting_s_n=5., aper_radius=None):
 
@@ -189,7 +199,7 @@ class Observatory(object):
             The photon-counting sensor used for the observations.
         telescope: Telescope object
             The telescope used for the observations.
-        filter_bandpass: pysynphot.bandpass object
+        filter_bandpass: synphot.SpectralElement object
             The filter bandpass as a function of wavelength.
         exposure_time: float
             The duration of each exposure, in seconds.
@@ -203,22 +213,29 @@ class Observatory(object):
             The radius of the aperture used for photometry, in pixels. 
             If not specified, the optimal aperture is calculated. ZZZ not used yet
         '''
-
+        if filter_bandpass is None:
+            filter_bandpass = SpectralElement(ConstFlux1D, amplitude=1.0)
+            
         self.sensor = sensor
         self.telescope = telescope
         self.filter_bandpass = filter_bandpass
         self.bandpass = (filter_bandpass * self.telescope.bandpass *
                          self.sensor.qe)
+        
         # Avoid error when all throughputs are flat
-        all_flat_q = (np.all((self.filter_bandpass.wave is None)) and
-                      np.all((self.sensor.qe.wave is None)) and
-                      np.all(self.telescope.bandpass.wave is None))
-        if all_flat_q:
+        # In synphot, we need to check if wavelengths are defined
+        if (self.bandpass.waveset is None or len(self.bandpass.waveset) == 0 or
+            (len(self.bandpass.waveset) == 2 and 
+             np.all(self.bandpass.waveset == [self.bandpass.waveset.min(), self.bandpass.waveset.max()]))):
             warnings.warn('Infinite bandpass. Manually setting wavelength limits (50-2600 nm).')
-            wavelengths = S.FlatSpectrum(1, fluxunits='flam').wave
-            array_bp = S.ArrayBandpass(wavelengths, np.ones(len(wavelengths)))
+            wavelengths = np.arange(500, 26000, 10) * u.AA  # 50-2600 nm in Angstroms
+            throughput = np.ones(len(wavelengths))
+            array_bp = SpectralElement(Empirical1D, points=wavelengths, 
+                                     lookup_table=throughput)
             self.bandpass = self.bandpass * array_bp
-        self.eff_area = self.bandpass * S.UniformTransmission(np.pi * self.telescope.diam ** 2 / 4)
+            
+        self.eff_area = self.bandpass * SpectralElement(ConstFlux1D, 
+                                                       amplitude=np.pi * self.telescope.diam ** 2 / 4)
         self.lambda_pivot = self.bandpass.pivot()
         self.exposure_time = exposure_time
         self.num_exposures = num_exposures
@@ -230,9 +247,17 @@ class Observatory(object):
 
     def binset(self, spectrum):
         '''Narrowest binset from telescope, sensor, filter, and spectrum.'''
-        binset_list = [self.filter_bandpass.wave, self.sensor.qe.wave,
-                       self.telescope.bandpass.wave, spectrum.wave]
-        binset_list = [x for x in binset_list if x is not None]
+        # In synphot, waveset is the equivalent of wave
+        binset_list = []
+        for element in [self.filter_bandpass, self.sensor.qe, 
+                       self.telescope.bandpass, spectrum]:
+            if hasattr(element, 'waveset') and element.waveset is not None:
+                binset_list.append(element.waveset.value)  # Get numpy array from Quantity
+                
+        if not binset_list:
+            # If no wavesets defined, create a default one
+            return np.arange(3000, 11000, 10)
+            
         range_list = [np.ptp(x) for x in binset_list]
         obs_binset = binset_list[np.argmin(range_list)]
         return obs_binset
@@ -242,13 +267,18 @@ class Observatory(object):
 
         Parameters
         ----------
-        spectrum: pysynphot.spectrum object
+        spectrum: synphot.SourceSpectrum object
             The spectrum for which to calculate the signal.
         '''
-        S.setref(area=np.pi * self.telescope.diam ** 2 / 4)
-        obs = S.Observation(spectrum, self.bandpass, binset=self.bandpass.wave,
-                            force='extrap')
-        raw_rate = obs.countrate()
+        # Set the telescope area
+        area = np.pi * self.telescope.diam ** 2 / 4 * u.cm ** 2
+        
+        # Create observation with force='extrap' to handle partial overlaps
+        obs = Observation(spectrum, self.bandpass, binset=self.bandpass.waveset,
+                         force='extrap')
+        
+        # Get count rate - synphot uses different method
+        raw_rate = obs.countrate(area=area).value
         signal = raw_rate * self.exposure_time
         return signal
 
@@ -256,22 +286,31 @@ class Observatory(object):
         '''The background noise per pixel, in e-/pix.'''
         bkg_wave, bkg_ilam = bkg_spectrum_space(self.eclip_lat)
         bkg_flam = bkg_ilam * self.pix_scale ** 2
-        bkg_sp = S.ArraySpectrum(bkg_wave, bkg_flam, fluxunits='flam')
+        # Convert to synphot SourceSpectrum
+        bkg_sp = SourceSpectrum(Empirical1D, points=bkg_wave * u.AA, 
+                              lookup_table=bkg_flam * units.FLAM)
         bkg_signal = self.tot_signal(bkg_sp)
         return bkg_signal
 
     def eff_area_pivot(self):
         '''The effective photometric area of the observatory at the pivot wavelength, in cm^2.'''
         tele_area = np.pi * self.telescope.diam ** 2 / 4
-        pivot_throughput = np.interp(self.lambda_pivot,
-                                     self.bandpass.wave,
-                                     self.bandpass.throughput)
+        # Get wavelength array and throughput
+        if self.bandpass.waveset is not None:
+            wave_array = self.bandpass.waveset.to(u.AA).value
+            throughput_array = self.bandpass(self.bandpass.waveset)
+            pivot_throughput = np.interp(self.lambda_pivot.to(u.AA).value,
+                                       wave_array, throughput_array)
+        else:
+            pivot_throughput = 1.0
         eff_area = tele_area * pivot_throughput
         return eff_area
 
     def psf_fwhm_um(self):
         '''The full width at half maximum of the PSF, in microns.'''
-        diff_lim_fwhm = 1.025 * self.lambda_pivot * self.telescope.f_num / 10 ** 4
+        # Convert pivot wavelength to Angstroms for calculation
+        pivot_ang = self.lambda_pivot.to(u.AA).value
+        diff_lim_fwhm = 1.025 * pivot_ang * self.telescope.f_num / 10 ** 4
         if self.telescope.psf_type == 'airy':
             fwhm = diff_lim_fwhm
         elif self.telescope.psf_type == 'gaussian':
@@ -287,9 +326,10 @@ class Observatory(object):
             pix_frac = psfs.gaussian_ensq_energy(half_width, psf_sigma,
                                                  psf_sigma)
         elif self.telescope.psf_type == 'airy':
+            pivot_ang = self.lambda_pivot.to(u.AA).value
             half_width = (np.pi * self.sensor.pix_size /
                           (2 * self.telescope.f_num *
-                           self.lambda_pivot * 10 ** -4))
+                           pivot_ang * 10 ** -4))
             pix_frac = psfs.airy_ensq_energy(half_width)
         return pix_frac
 
@@ -298,7 +338,7 @@ class Observatory(object):
 
         Parameters
         ----------
-        spectrum: pysynphot.spectrum object
+        spectrum: synphot.SourceSpectrum object
             The spectrum for which to calculate the signal.
         '''
         pix_frac = self.central_pix_frac()
@@ -322,15 +362,14 @@ class Observatory(object):
     def limiting_mag(self, eps=0.05):
         '''Get the limiting AB magnitude for the observatory parameters.'''
         mag = 10
-        spectrum = S.FlatSpectrum(mag, fluxunits='abmag')
-        spectrum.convert('fnu')
+        # Create flat spectrum in AB mag
+        spectrum = SourceSpectrum(ConstFlux1D, amplitude=mag * u.ABmag)
         results_dict = self.observe(spectrum)
         snr_ratio = results_dict['snr'] / self.limiting_s_n
         i = 0
         while abs(snr_ratio - 1) > eps and i < 10:
             mag = mag + 2.5 * np.log10(snr_ratio)
-            spectrum = S.FlatSpectrum(mag, fluxunits='abmag')
-            spectrum.convert('fnu')
+            spectrum = SourceSpectrum(ConstFlux1D, amplitude=mag * u.ABmag)
             results_dict = self.observe(spectrum)
             snr_ratio = results_dict['snr'] / self.limiting_s_n
             i += 1
@@ -341,8 +380,7 @@ class Observatory(object):
     def saturating_mag(self):
         '''The saturating AB magnitude for the observatory.'''
         # We consider just the central pixel, which will saturate first.
-        mag_10_spectrum = S.FlatSpectrum(10, fluxunits='abmag')
-        mag_10_spectrum.convert('fnu')
+        mag_10_spectrum = SourceSpectrum(ConstFlux1D, amplitude=10 * u.ABmag)
         mag_10_signal = self.single_pix_signal(mag_10_spectrum)
         bkg_signal = self.bkg_per_pix()
         dark_noise = self.sensor.dark_current * self.exposure_time
@@ -380,7 +418,7 @@ class Observatory(object):
 
         Parameters
         ----------
-        spectrum: pysynphot.spectrum object
+        spectrum: synphot.SourceSpectrum object
             The spectrum for which to calculate the intensity grid.
         pos: array-like (default np.array([0, 0]))
             The centroid position of the source on the subarray, in
@@ -392,6 +430,7 @@ class Observatory(object):
             The number of sub-pixels per pixel.
         '''
         tot_signal = self.tot_signal(spectrum)
+        pivot_ang = self.lambda_pivot.to(u.AA).value
         if self.telescope.psf_type == 'gaussian':
             psf_sigma = self.psf_fwhm_um() / 2.355
             cov_mat = [[psf_sigma ** 2, 0], [0, psf_sigma ** 2]]
@@ -401,7 +440,7 @@ class Observatory(object):
             psf_grid = psfs.airy_disk(img_size, resolution,
                                       self.sensor.pix_size, pos,
                                       self.telescope.f_num,
-                                      self.lambda_pivot)
+                                      pivot_ang)
         intensity_grid = psf_grid * tot_signal
         return intensity_grid
 
@@ -437,8 +476,7 @@ class Observatory(object):
         '''Get relative signal with PSF centered at each subpixel.'''
         # Looking at this grid can show you whether subpixel
         # variations in sensitivity are important.
-        spec = S.FlatSpectrum(15, fluxunits='abmag')
-        spec.convert('fnu')
+        spec = SourceSpectrum(ConstFlux1D, amplitude=15 * u.ABmag)
         intrapix_grid = self.get_intrapix_grid(img_size, resolution, intrapix_sigma)
         initial_grid = self.signal_grid_fine(spec, pos, img_size, resolution)
         relative_signal_grid = np.zeros((resolution, resolution))
@@ -457,7 +495,7 @@ class Observatory(object):
         
         Parameters
         ----------
-        spectrum: pysynphot.spectrum object
+        spectrum: synphot.SourceSpectrum object
             The spectrum of the point source to observe.
         pos: array-like (default [0, 0])
             The centroid position of the source on the central pixel,
@@ -508,7 +546,7 @@ class Observatory(object):
 
         Parameters
         ----------
-        spectrum: pysynphot.spectrum object
+        spectrum: synphot.SourceSpectrum object
             The spectrum for which to calculate the intensity grid.
         pos: array-like (default [0, 0])
             The centroid position of the source on the subarray, in
@@ -565,7 +603,7 @@ class Observatory(object):
 
         Parameters
         ----------
-        spectrum: pysynphot.spectrum object
+        spectrum: synphot.SourceSpectrum object
             The spectrum of the point source to observe.
         pos: array-like (default [0, 0])
             The centroid position of the source on the subarray, in
@@ -624,18 +662,15 @@ class Observatory(object):
 # Some tests of Observatory behavior
 if __name__ == '__main__':
     data_folder = os.path.dirname(__file__) + '/../data/'
-    sensor_bandpass = S.FileBandpass(data_folder + 'imx455.fits')
+    # For file-based bandpass, use SpectralElement.from_file()
+    sensor_bandpass = SpectralElement.from_file(data_folder + 'imx455.fits')
     imx455 = Sensor(pix_size=2.74, read_noise=1, dark_current=0.005,
                     full_well=51000, qe=sensor_bandpass,
                     intrapix_sigma=6)
-
     mono_tele_v10uvs = Telescope(diam=25, f_num=1.8, psf_type='airy', bandpass=0.758)
-    b_bandpass = S.ObsBandpass('johnson,b')
-    r_bandpass = S.ObsBandpass('johnson,r')
-    vis_bandpass = S.UniformTransmission(1.0)
-
-    flat_spec = S.FlatSpectrum(15, fluxunits='abmag')
-    flat_spec.convert('fnu')
+    # For standard bandpasses, use SpectralElement.from_filter()
+    r_bandpass = SpectralElement.from_filter('johnson_r')
+    flat_spec = SourceSpectrum(ConstFlux1D, amplitude=15 * u.ABmag)
     tess_geo_obs = Observatory(telescope=mono_tele_v10uvs, sensor=imx455,
                                filter_bandpass=r_bandpass, eclip_lat=90,
                                exposure_time=1, num_exposures=6, aper_radius=None)

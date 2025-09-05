@@ -4,7 +4,9 @@ import os
 import copy
 import tkinter as tk
 from tkinter import messagebox
-import pysynphot as S
+from synphot import SpectralElement, SourceSpectrum, ConstFlux1D, Empirical1D
+import astropy.units as u
+from synphot.units import FLAM
 import numpy as np
 import matplotlib.pyplot as plt
 from spectra import *
@@ -297,21 +299,30 @@ class MyGUI:
             self.sens_vars['qe'][2] = tk.DoubleVar()
             self.sens_vars['qe'][3].config(textvariable=self.sens_vars['qe'][2])
             self.sens_vars['qe'][3].config(state='normal')
-            self.sens_vars['qe'][3].set(np.mean(self.sens.qe.throughput))
+            # For synphot, evaluate at wavelengths to get mean
+            if self.sens.qe.waveset is not None:
+                qe_values = self.sens.qe(self.sens.qe.waveset)
+                self.sens_vars['qe'][3].set(np.mean(qe_values))
+            else:
+                self.sens_vars['qe'][3].set(1.0)
 
     def set_tele(self, *_):
         '''Set the telescope based on the selected telescope name.'''
         self.tele = telescope_dict_lightspeed[self.tele_vars['name'][2].get()]
         self.tele_vars['diam'][2].set(self.tele.diam)
         self.tele_vars['f_num'][2].set(self.tele.f_num)
-        self.tele_vars['bandpass'][2].set(self.tele.bandpass)
+        # For constant transmission, get the amplitude value
+        if hasattr(self.tele.bandpass, 'model') and hasattr(self.tele.bandpass.model, 'amplitude'):
+            self.tele_vars['bandpass'][2].set(self.tele.bandpass.model.amplitude.value)
+        else:
+            self.tele_vars['bandpass'][2].set(1.0)
 
     def set_obs(self):
         '''Set the observatory when running calculations'''
         if self.sens_vars['qe'][2].get() == 'ARRAY':
             qe = self.sens.qe
         else:
-            qe = S.UniformTransmission(float(self.sens_vars['qe'][2].get()))
+            qe = SpectralElement(ConstFlux1D, amplitude=float(self.sens_vars['qe'][2].get()))
         sens = Sensor(pix_size=self.sens_vars['pix_size'][2].get(),
                       read_noise=self.sens_vars['read_noise'][2].get(),
                       dark_current=self.sens_vars['dark_current'][2].get(),
@@ -325,7 +336,7 @@ class MyGUI:
         limiting_snr = self.obs_vars_dict['limiting_snr'][2].get()
         filter_bp = filter_dict_lightspeed[self.obs_vars_dict['filter'][2].get()]
         reimaging_throughput = self.obs_vars_dict['reim_throughput'][2].get()
-        reimaging_bp = S.UniformTransmission(reimaging_throughput)
+        reimaging_bp = SpectralElement(ConstFlux1D, amplitude=reimaging_throughput)
         total_filter_bp = filter_bp * reimaging_bp
         seeing_arcsec = self.obs_vars_dict['seeing'][2].get()
         obs_zo = self.obs_vars_dict['zo'][2].get()
@@ -352,9 +363,9 @@ class MyGUI:
             # Convert to Jansky's; sometimes Pysynphot freaks out when
             # using AB magnitudes.
             fluxdensity_jy = 10 ** (-0.4 * (abmag - 8.90))
-            spectrum = S.FlatSpectrum(fluxdensity=fluxdensity_jy,
-                                      fluxunits='Jy')
-            # spectrum.convert('fnu')
+            # In synphot, use SourceSpectrum with ConstFlux1D
+            spectrum = SourceSpectrum(ConstFlux1D, 
+                                    amplitude=fluxdensity_jy * u.Jy)
         elif self.bb_spec_bool.get():
             temp = self.bb_temp.get()
             distance = self.bb_distance.get()
@@ -375,7 +386,8 @@ class MyGUI:
             saturating_mag = observatory.saturating_mag()
             turnover_exp_time = observatory.turnover_exp_time()
             self.basic_results['pix_scale'][2] = observatory.pix_scale
-            self.basic_results['lambda_pivot'][2] = observatory.lambda_pivot
+            # Convert pivot wavelength to Angstroms
+            self.basic_results['lambda_pivot'][2] = observatory.lambda_pivot.to(u.AA).value
             fwhm_arcsec = (observatory.psf_fwhm_um() * observatory.pix_scale /
                            observatory.sensor.pix_size)
             self.basic_results['psf_fwhm'][2] = fwhm_arcsec
@@ -421,20 +433,28 @@ class MyGUI:
         tele_bp = obs.telescope.bandpass
         filter_bp = filter_dict_lightspeed[self.obs_vars_dict['filter'][2].get()]
         reimaging_throughput = self.obs_vars_dict['reim_throughput'][2].get()
-        reimaging_bp = S.UniformTransmission(reimaging_throughput)
-        atmo_throughput_with_airmass = atmo_bandpass.throughput ** obs.airmass
-        atmo_bp = S.ArrayBandpass(atmo_bandpass.wave, atmo_throughput_with_airmass)
+        reimaging_bp = SpectralElement(ConstFlux1D, amplitude=reimaging_throughput)
+        # Get atmospheric bandpass with airmass
+        wavelengths = atmo_bandpass.waveset
+        throughput_values = atmo_bandpass(wavelengths)
+        atmo_throughput_with_airmass = throughput_values ** obs.airmass
+        atmo_bp = SpectralElement(Empirical1D, points=wavelengths,
+                                lookup_table=atmo_throughput_with_airmass)
         total_bp = (sens_bp * filter_bp * reimaging_bp * tele_bp * atmo_bp)
         bps_to_plot = [sens_bp, filter_bp, reimaging_bp, tele_bp, atmo_bp, total_bp]
         bp_names = ['Sensor QE', 'Filter', 'Reimaging Optics', 'Telescope', 'Atmosphere', 'Total']
         linestyles = ['--', '--', ':', ':', '-.', '-']
         for bp, name, ls in zip(bps_to_plot, bp_names, linestyles):
-            if isinstance(bp, S.UniformTransmission):
+            if hasattr(bp, 'model') and hasattr(bp.model, 'amplitude') and bp.waveset is None:
+                # Uniform transmission
                 wave = np.linspace(200, 1000, 100)
-                throughput = np.ones_like(wave) * bp.throughput
+                throughput = np.ones_like(wave) * bp.model.amplitude.value
                 plt.plot(wave, throughput * 100, ls, label=name)
             else:
-                plt.plot(bp.wave / 10, bp.throughput * 100, ls, label=name)
+                # Array-based bandpass
+                wave_nm = bp.waveset.to(u.nm).value
+                throughput = bp(bp.waveset)
+                plt.plot(wave_nm, throughput * 100, ls, label=name)
         plt.legend()
         plt.xlabel('Wavelength (nm)')
         plt.ylabel('Transmission (%)')
@@ -452,7 +472,7 @@ class MyGUI:
         observatory = self.set_obs()
         img_size = 11
         for i, mag in enumerate(mag_points):
-            spectrum = S.FlatSpectrum(mag, fluxunits='abmag')
+            spectrum = SourceSpectrum(ConstFlux1D, amplitude=mag * u.ABmag)
             results = observatory.observe(spectrum, img_size=img_size)
             snr = results['signal'] / results['tot_noise']
             phot_prec = 10 ** 6 / snr
