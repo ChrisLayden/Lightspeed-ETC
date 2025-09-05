@@ -1,30 +1,21 @@
 # Lightspeed-ETC
 An exposure time calculator for the Lightspeed instrument planned for installation on the Magellan Clay Telescope.
 
-Requires tkinter, pysynphot, matplotlib, astropy, numpy, and scipy.
+Requires synphot, matplotlib, astropy, numpy, and scipy.
 
 CPL 04/23/2025
 
-Steps to make pysynphot operational:
-1) Install pysynphot: use
+How to use:
+1) Install synphot: use
 
 ```
-pip install pysynphot
+pip install synphot
 ```
 
-If this doesn't work, see more information at https://pysynphot.readthedocs.io/en/latest/
-
-2) Download just the first two sets of pysynphot data files
-(http://ssb.stsci.edu/trds/tarfiles/synphot1.tar.gz and
-http://ssb.stsci.edu/trds/tarfiles/synphot2.tar.gz); unpack these
-to some directory /my/dir
-
-3) set
-```
-export PYSYN_CDBS=/my/dir/grp/redcat/trds
+If this doesn't work, see more information at https://synphot.readthedocs.io/en/latest/
 ```
 
-To open the Lightspeed ETC, use
+2) To open the Lightspeed ETC, use
 
 ```
 cd scripts
