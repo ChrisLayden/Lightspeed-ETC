@@ -91,10 +91,9 @@ sloan_zprime = np.genfromtxt(data_folder + 'SLOAN_SDSS.zprime_filter.dat',
                              delimiter='\t')
 sloan_zprime = S.ArrayBandpass(sloan_zprime[:, 0], sloan_zprime[:, 1])
 
-# Bandpass representing transmission through the atmosphere at airmass 1
-atmo_bandpass = np.genfromtxt(data_folder + 'atmo_transmission_airmass1.csv',
-                              delimiter=',')
-atmo_bandpass = S.ArrayBandpass(atmo_bandpass[:, 0] * 10, atmo_bandpass[:, 1])
+# Halpha filter
+ha_filter = np.genfromtxt(data_folder + 'halpha_filter.csv', delimiter=',', skip_header=1)
+ha_filter = S.ArrayBandpass(ha_filter[:, 0] * 10, ha_filter[:, 1] / 100)
 
 # Array with uniform total transmission 4000-7000 ang
 vis_wave = np.arange(4000, 7000, 100)
@@ -117,15 +116,66 @@ filter_dict_lightspeed = {"None": no_filter, "Sloan u'": sloan_uprime,
                           "Sloan g'": sloan_gprime, "Sloan r'": sloan_rprime,
                           "Sloan i'": sloan_iprime, "Sloan z'": sloan_zprime}
 
+# Bandpass representing transmission through the atmosphere at airmass 1
+atmo_bandpass = np.genfromtxt(data_folder + 'atmo_transmission_airmass1.csv',
+                              delimiter=',')
+atmo_bandpass = S.ArrayBandpass(atmo_bandpass[:, 0] * 10, atmo_bandpass[:, 1])
+
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
-    plt.plot(sloan_uprime.wave, sloan_uprime.throughput, label='Sloan u\'')
-    plt.plot(sloan_gprime.wave, sloan_gprime.throughput, label='Sloan g\'')
-    plt.plot(sloan_rprime.wave, sloan_rprime.throughput, label='Sloan r\'')
-    plt.plot(sloan_iprime.wave, sloan_iprime.throughput, label='Sloan i\'')
-    plt.plot(sloan_zprime.wave, sloan_zprime.throughput, label='Sloan z\'')
-    plt.legend()
-    plt.xlabel('Wavelength (Angstroms)')
-    plt.ylabel('Throughput')
+    # Transmission plots for SDSS filters and for QE
+    xpoints_oiii = np.arange(485, 515, 0.5)
+    ypoints_oiii = 0.97 * np.exp(-0.5 * ((xpoints_oiii - 500.7) / 3.822)**2)
+    plt.rcParams.update({'font.size': 14})
+    # plt.figure(figsize=(12, 6))
+    # plt.plot(sloan_uprime.wave / 10, sloan_uprime.throughput * 100, 'b--', label='SDSS u\'', alpha=0.5)
+    # plt.plot(sloan_gprime.wave / 10, sloan_gprime.throughput * 100, 'g--', label='SDSS g\'', alpha=0.5)
+    # plt.plot(sloan_rprime.wave / 10, sloan_rprime.throughput * 100, 'r--', label='SDSS r\'', alpha=0.5)
+    # plt.plot(sloan_iprime.wave / 10, sloan_iprime.throughput * 100, 'm--', label='SDSS i\'', alpha=0.5)
+    # plt.plot(sloan_zprime.wave / 10, sloan_zprime.throughput * 100, 'c--', label='SDSS z\'', alpha=0.5)
+    # plt.plot(xpoints_oiii, ypoints_oiii * 100, '-.', color='darkorange', label='Baader OIII', alpha=0.5)
+    # plt.plot(ha_filter.wave / 10, ha_filter.throughput * 100, '-.', color='darkred', label=r'Alluxa $H_\alpha$', alpha=0.5)
+    # # plt.plot(atmo_bandpass.wave / 10, atmo_bandpass.throughput * 100, 'k:', label='Atmosphere', alpha=0.5)
+    # plt.plot(qcmos_qe.wave / 10, qcmos_qe.throughput * 100, 'k', label='Datasheet QE', alpha=0.5)
+    # qCMOS_meas_QE_wavelengths = np.array([296.7, 400., 500., 550., 600., 640., 700., 800., 900., 1000., 1064.])
+    # qCMOS_meas_QE = np.array([0.3756, 0.8271, 0.8604, 0.8193, 0.7585, 0.6932, 0.6111, 0.4982, 0.3117, 0.0932, 0.0115])
+    # xerr = 5
+    # yerr = 0.05 * 100
+    # plt.errorbar(qCMOS_meas_QE_wavelengths, qCMOS_meas_QE * 100, xerr=xerr, yerr=yerr, label='Measured QE', fmt='k.', markersize=1)
+    # # Put legend above the plot
+    # plt.legend(ncols=1, loc='center left', bbox_to_anchor=(0.76, 0.65), fontsize=12)
+    # plt.xlabel('Wavelength (nm)')
+    # plt.ylabel('Transmission (%)')
+    # plt.xlim(250, 1100)
+    # plt.ylim(0,100)
+    # plt.show()
+    plt.figure(figsize=(10, 6))
+    tot_thru_u = sloan_uprime * qcmos_qe * atmo_bandpass * 0.05
+    tot_thru_g = sloan_gprime * qcmos_qe * atmo_bandpass * 0.57
+    tot_thru_r = sloan_rprime * qcmos_qe * atmo_bandpass * 0.65
+    tot_thru_i = sloan_iprime * qcmos_qe * atmo_bandpass * 0.28
+    tot_thru_z = sloan_zprime * qcmos_qe * atmo_bandpass * 0.06
+    tot_thru_oiii = S.ArrayBandpass(xpoints_oiii * 10, ypoints_oiii) * qcmos_qe * atmo_bandpass * 0.57
+    tot_thru_halpha = ha_filter * qcmos_qe * atmo_bandpass * 0.65
+    plt.plot(tot_thru_u.wave / 10, tot_thru_u.throughput * 100, 'b--', label='SDSS u\'', alpha=0.5)
+    plt.plot(tot_thru_g.wave / 10, tot_thru_g.throughput * 100, 'g--', label='SDSS g\'', alpha=0.5)
+    plt.plot(tot_thru_r.wave / 10, tot_thru_r.throughput * 100, 'r--', label='SDSS r\'', alpha=0.5)
+    plt.plot(tot_thru_i.wave / 10, tot_thru_i.throughput * 100, 'm--', label='SDSS i\'', alpha=0.5)
+    plt.plot(tot_thru_z.wave / 10, tot_thru_z.throughput * 100, 'c--', label='SDSS z\'', alpha=0.5)
+    plt.plot(tot_thru_oiii.wave / 10, tot_thru_oiii.throughput * 100, '-.', color='darkorange', label='Baader OIII', alpha=0.5)
+    plt.plot(tot_thru_halpha.wave / 10, tot_thru_halpha.throughput * 100, '-.', color='darkred', label='Halpha', alpha=0.5)
+    # Use text to label the 5 curves
+    plt.text(tot_thru_u.pivot() / 10, np.max(tot_thru_u.throughput) * 100 + 0.5, "u'", color='b', ha='center')
+    plt.text(tot_thru_g.pivot() / 10, np.max(tot_thru_g.throughput) * 100 + 0.5, "g'", color='g', ha='center')
+    plt.text(tot_thru_r.pivot() / 10, np.max(tot_thru_r.throughput) * 100 + 0.5, "r'", color='r', ha='center')
+    plt.text(tot_thru_i.pivot() / 10, np.max(tot_thru_i.throughput) * 100 + 0.5, "i'", color='m', ha='center')
+    plt.text(tot_thru_z.pivot() / 10, np.max(tot_thru_z.throughput) * 100 + 0.5, "z'", color='c', ha='center')
+    plt.text(500.7, np.max(tot_thru_oiii.throughput) * 100 + 0.5, "OIII", color='darkorange', ha='center')
+    plt.text(656.3, np.max(tot_thru_halpha.throughput) * 100 + 0.5, r"$H_\alpha$", color='darkred', ha='center')
+    plt.xlim(300, 1050)
+    plt.ylim(0.1, 40)
+    plt.xlabel('Wavelength (nm)')
+    plt.ylabel('Transmission (%)')
     plt.show()
+
