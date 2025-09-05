@@ -23,7 +23,7 @@ import psfs
 class GroundObservatory(Observatory):
     '''A class for ground-based observatories, inheriting from Observatory.'''
 
-    def __init__(self, sensor, telescope, filter_bandpass=None,
+    def __init__(self, sensor, telescope, filter_bandpass=SpectralElement(ConstFlux1D, amplitude=1.0),
                  exposure_time=1., num_exposures=1, seeing=1.0,
                  limiting_s_n=5., altitude=0, alpha=180, zo=0, rho=45,
                  aper_radius=None):
@@ -62,8 +62,6 @@ class GroundObservatory(Observatory):
             The radius of the aperture, in pixels. If None, the optimal
             aperture will be calculated.
         '''
-        if filter_bandpass is None:
-            filter_bandpass = SpectralElement(ConstFlux1D, amplitude=1.0)
 
         super().__init__(sensor=sensor, telescope=telescope,
                          filter_bandpass=filter_bandpass,
@@ -80,14 +78,14 @@ class GroundObservatory(Observatory):
         # Formula 3 in Krisciunas & Schaefer 1991 for airmass.
         self.airmass = (1 - 0.96 * np.sin(np.radians(zo)) ** 2) ** -0.5
         # atmospheric transmission from https://arxiv.org/pdf/0708.1364
-        # Get wavelengths and throughput values from atmo_bandpass
-        wavelengths = atmo_bandpass.waveset
-        throughput_values = atmo_bandpass(wavelengths)
-        atmo_throughput_with_airmass = throughput_values ** self.airmass
-        atmo_bp = SpectralElement(Empirical1D, points=wavelengths,
+        atmo_throughput_with_airmass = atmo_bandpass(atmo_bandpass.waveset) ** self.airmass
+        atmo_bp = SpectralElement(Empirical1D, points=atmo_bandpass.waveset,
                                 lookup_table=atmo_throughput_with_airmass)
         self.bandpass = (filter_bandpass * self.telescope.bandpass *
                          self.sensor.qe * atmo_bp)
+        self.eff_area = self.bandpass * SpectralElement(ConstFlux1D, 
+                                                       amplitude=np.pi * self.telescope.diam ** 2 / 4)
+        self.lambda_pivot = self.bandpass.pivot()
         self.rho = rho
         # The zenith angle of the moon, in degrees.
         self.zm = zo - rho

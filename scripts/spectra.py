@@ -1,5 +1,5 @@
 from synphot import SourceSpectrum, Empirical1D
-from synphot.models import BlackBody1D, PowerLawFlux1D
+from synphot.models import BlackBody1D, BlackBodyNorm1D
 import astropy.units as u
 from synphot.units import FLAM
 from redshift_lookup import RedshiftLookup
@@ -18,37 +18,34 @@ def blackbody_spec(temp, dist, l_bol):
             The luminosity distance at which the spectrum is
             specified, in Mpc.
         l_bol: float
-            The bolometric luminosity of the source.
+            The bolometric luminosity of the source, in erg/s.
         '''
-    # Create a blackbody spectrum
-    # In synphot, we need to specify temperature with units
-    spectrum = SourceSpectrum(BlackBody1D, temperature=temp * u.K)
-    
+    # Create a blackbody spectrum. Default spectrum is normalized to
+    # a radius of 1 R_SUN at a distance of 1 kpc.
+    spectrum = SourceSpectrum(BlackBodyNorm1D, temperature=temp * u.K)
+    wavelengths = spectrum.waveset
+    flux_values = spectrum(wavelengths)
     ztab = RedshiftLookup()
     initial_z = ztab(10 ** -3)
     obs_z = ztab(dist)
     
-    # Get wavelengths and flux from the spectrum
-    # Use a reasonable wavelength range for evaluation
-    wavelengths = spectrum.waveset
-    if wavelengths is None or len(wavelengths) < 3:
-        # If no waveset defined, create a reasonable range
-        wavelengths = np.arange(100, 100000, 10) * u.AA
-    
-    flux_values = spectrum(wavelengths)
-    
     # Adjust the wavelengths of the source spectrum to account for
     # the redshift, and the flux for the luminosity distance.
     obs_wave = wavelengths * (1+initial_z) / (1+obs_z)
-    obs_flux = (flux_values * (1+initial_z) / (1+obs_z)
-                * (10 ** -3 / dist) ** 2)
+    obs_flux = (flux_values * (1+initial_z) / (1+obs_z))
     
     # Scale the flux using the desired bolometric luminosity
     l_bol_scaling = l_bol / (4 * np.pi * constants.sigma *
                              constants.R_SUN ** 2 * temp ** 4)
+    l_bol_scaling = l_bol_scaling / (dist * 1000) ** 2
     obs_flux *= l_bol_scaling
     
     # Create the observed spectrum
     obs_spectrum = SourceSpectrum(Empirical1D, points=obs_wave,
                                 lookup_table=obs_flux)
     return obs_spectrum
+
+if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+    spec = SourceSpectrum(BlackBodyNorm1D, temperature=5777)
+    print(spec(5000*u.AA, flux_unit=FLAM) * (2 * 10 ** 8) ** 2)

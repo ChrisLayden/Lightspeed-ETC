@@ -152,6 +152,7 @@ class MyGUI:
                               'limiting_mag': ['Limiting AB magnitude'],
                               'saturating_mag': ['Saturating AB magnitude'],
                               'airmass': ['Airmass'],
+                              'zero_point': ['Zero Point AB Magnitude (1 e-/s)'],
                               'exptime_turnover': ['t_exp where bkg noise = read noise (s)']}
         for i, (key, value) in enumerate(self.basic_results.items()):
             value.append(tk.Label(self.root, text=value[0]))
@@ -223,7 +224,7 @@ class MyGUI:
         # Make a button to plot mag vs noise
         self.plot_button = tk.Button(self.root, text='Plot Magnitude vs. Photometric Precision',
                                     command=self.plot_mag_vs_noise, fg='green')
-        self.plot_button.grid(row=10, column=4, columnspan=2, padx=PADX,
+        self.plot_button.grid(row=11, column=4, columnspan=2, padx=PADX,
                               pady=PADY)
         # Set default values
         self.sens = sensor_dict_lightspeed['qCMOS']
@@ -238,7 +239,6 @@ class MyGUI:
         self.obs_vars_dict['zo'][2].set(0.0)
         self.obs_vars_dict['alpha'][2].set(180)
         self.obs_vars_dict['rho'][2].set(45)
-        # self.obs_vars_dict['aper_rad'][2].set('None')
         self.root.mainloop()
 
     def clear_results(self, *_):
@@ -299,12 +299,6 @@ class MyGUI:
             self.sens_vars['qe'][2] = tk.DoubleVar()
             self.sens_vars['qe'][3].config(textvariable=self.sens_vars['qe'][2])
             self.sens_vars['qe'][3].config(state='normal')
-            # For synphot, evaluate at wavelengths to get mean
-            if self.sens.qe.waveset is not None:
-                qe_values = self.sens.qe(self.sens.qe.waveset)
-                self.sens_vars['qe'][3].set(np.mean(qe_values))
-            else:
-                self.sens_vars['qe'][3].set(1.0)
 
     def set_tele(self, *_):
         '''Set the telescope based on the selected telescope name.'''
@@ -363,9 +357,7 @@ class MyGUI:
             # Convert to Jansky's; sometimes Pysynphot freaks out when
             # using AB magnitudes.
             fluxdensity_jy = 10 ** (-0.4 * (abmag - 8.90))
-            # In synphot, use SourceSpectrum with ConstFlux1D
-            spectrum = SourceSpectrum(ConstFlux1D, 
-                                    amplitude=fluxdensity_jy * u.Jy)
+            spectrum = SourceSpectrum(ConstFlux1D, amplitude=fluxdensity_jy * u.Jy)
         elif self.bb_spec_bool.get():
             temp = self.bb_temp.get()
             distance = self.bb_distance.get()
@@ -382,21 +374,18 @@ class MyGUI:
         '''Run calculations for basic observing properties.'''
         try:
             observatory = self.set_obs()
-            limiting_mag = observatory.limiting_mag()
-            saturating_mag = observatory.saturating_mag()
-            turnover_exp_time = observatory.turnover_exp_time()
             self.basic_results['pix_scale'][2] = observatory.pix_scale
-            # Convert pivot wavelength to Angstroms
             self.basic_results['lambda_pivot'][2] = observatory.lambda_pivot.to(u.AA).value
             fwhm_arcsec = (observatory.psf_fwhm_um() * observatory.pix_scale /
                            observatory.sensor.pix_size)
             self.basic_results['psf_fwhm'][2] = fwhm_arcsec
             self.basic_results['central_pix_frac'][2] = observatory.central_pix_frac() * 100
-            self.basic_results['eff_area_pivot'][2] = observatory.eff_area_pivot()
-            self.basic_results['limiting_mag'][2] = limiting_mag
-            self.basic_results['saturating_mag'][2] = saturating_mag
+            self.basic_results['eff_area_pivot'][2] = observatory.eff_area(observatory.lambda_pivot).value
+            self.basic_results['limiting_mag'][2] = observatory.limiting_mag()
+            self.basic_results['saturating_mag'][2] = observatory.saturating_mag()
             self.basic_results['airmass'][2] = observatory.airmass
-            self.basic_results['exptime_turnover'][2] = turnover_exp_time
+            self.basic_results['zero_point'][2] = observatory.zero_point_mag()
+            self.basic_results['exptime_turnover'][2] = observatory.turnover_exp_time()
             for key, value in self.basic_results.items():
                 value[3].config(text=format(value[2], '4.3f'))
         except ValueError as inst:
@@ -408,12 +397,12 @@ class MyGUI:
             spectrum = self.set_spectrum()
             observatory = self.set_obs()
             results = observatory.observe(spectrum)
-            signal = int(results['signal'])
-            noise = int(results['tot_noise'])
+            signal = results['signal']
+            noise = results['tot_noise']
             snr = results['signal'] / results['tot_noise']
             phot_prec = 10 ** 6 / snr
-            self.spec_results_data[0].config(text=format(signal, '4d'))
-            self.spec_results_data[1].config(text=format(noise, '4d'))
+            self.spec_results_data[0].config(text=format(signal, '3.2f'))
+            self.spec_results_data[1].config(text=format(noise, '3.2f'))
             self.spec_results_data[2].config(text=format(snr, '4.3f'))
             self.spec_results_data[3].config(text=format(phot_prec, '4.3f'))
             self.spec_results_data[4].config(text=format(results['n_aper'], '2d'))
@@ -434,20 +423,17 @@ class MyGUI:
         filter_bp = filter_dict_lightspeed[self.obs_vars_dict['filter'][2].get()]
         reimaging_throughput = self.obs_vars_dict['reim_throughput'][2].get()
         reimaging_bp = SpectralElement(ConstFlux1D, amplitude=reimaging_throughput)
-        # Get atmospheric bandpass with airmass
-        wavelengths = atmo_bandpass.waveset
-        throughput_values = atmo_bandpass(wavelengths)
-        atmo_throughput_with_airmass = throughput_values ** obs.airmass
-        atmo_bp = SpectralElement(Empirical1D, points=wavelengths,
+        atmo_throughput_with_airmass = atmo_bandpass(atmo_bandpass.waveset) ** obs.airmass
+        atmo_bp = SpectralElement(Empirical1D, points=atmo_bandpass.waveset,
                                 lookup_table=atmo_throughput_with_airmass)
-        total_bp = (sens_bp * filter_bp * reimaging_bp * tele_bp * atmo_bp)
+        total_bp = obs.bandpass
         bps_to_plot = [sens_bp, filter_bp, reimaging_bp, tele_bp, atmo_bp, total_bp]
         bp_names = ['Sensor QE', 'Filter', 'Reimaging Optics', 'Telescope', 'Atmosphere', 'Total']
         linestyles = ['--', '--', ':', ':', '-.', '-']
         for bp, name, ls in zip(bps_to_plot, bp_names, linestyles):
             if hasattr(bp, 'model') and hasattr(bp.model, 'amplitude') and bp.waveset is None:
                 # Uniform transmission
-                wave = np.linspace(200, 1000, 100)
+                wave = np.linspace(250, 1100, 100)
                 throughput = np.ones_like(wave) * bp.model.amplitude.value
                 plt.plot(wave, throughput * 100, ls, label=name)
             else:

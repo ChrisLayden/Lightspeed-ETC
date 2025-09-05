@@ -66,7 +66,7 @@ class Sensor(object):
     '''
 
     def __init__(self, pix_size, read_noise, dark_current,
-                 qe=None,
+                 qe=SpectralElement(ConstFlux1D, amplitude=1.0),
                  full_well=100000, intrapix_sigma=np.inf):
         '''Initialize a Sensor object.
 
@@ -87,10 +87,7 @@ class Sensor(object):
             each individual pixel, in um, modeling this intrapixel
             response as a Gaussian. If not specified, the intrapixel
             response is assumed to be flat (so intrapix_sigma is infinite).
-        '''
-        if qe is None:
-            qe = SpectralElement(ConstFlux1D, amplitude=1.0)
-        
+        '''     
         self.pix_size = pix_size
         self.read_noise = read_noise
         self.dark_current = dark_current
@@ -134,7 +131,7 @@ class Telescope(object):
         The focal plate scale, in um/arcsec
     '''
     def __init__(self, diam, f_num, psf_type='airy', fwhm=None,
-                 bandpass=None):
+                 bandpass=SpectralElement(ConstFlux1D, amplitude=1.0)):
         '''Initializing a telescope object.
 
         Parameters
@@ -152,10 +149,7 @@ class Telescope(object):
             accounting for throughput and any geometric blocking
             factor
 
-        '''
-        if bandpass is None:
-            bandpass = SpectralElement(ConstFlux1D, amplitude=1.0)
-            
+        ''' 
         self.diam = diam
         self.f_num = f_num
         self.bandpass = bandpass
@@ -187,7 +181,7 @@ class Observatory(object):
     '''Class specifying a complete observatory.'''
 
     def __init__(
-            self, sensor, telescope, filter_bandpass=None,
+            self, sensor, telescope, filter_bandpass=SpectralElement(ConstFlux1D, amplitude=1.0),
             exposure_time=1., num_exposures=1, eclip_lat=90,
             limiting_s_n=5., aper_radius=None):
 
@@ -213,8 +207,6 @@ class Observatory(object):
             The radius of the aperture used for photometry, in pixels. 
             If not specified, the optimal aperture is calculated. ZZZ not used yet
         '''
-        if filter_bandpass is None:
-            filter_bandpass = SpectralElement(ConstFlux1D, amplitude=1.0)
             
         self.sensor = sensor
         self.telescope = telescope
@@ -224,14 +216,11 @@ class Observatory(object):
         
         # Avoid error when all throughputs are flat
         # In synphot, we need to check if wavelengths are defined
-        if (self.bandpass.waveset is None or len(self.bandpass.waveset) == 0 or
-            (len(self.bandpass.waveset) == 2 and 
-             np.all(self.bandpass.waveset == [self.bandpass.waveset.min(), self.bandpass.waveset.max()]))):
+        if (self.bandpass.waveset is None or len(self.bandpass.waveset) == 0):
             warnings.warn('Infinite bandpass. Manually setting wavelength limits (50-2600 nm).')
             wavelengths = np.arange(500, 26000, 10) * u.AA  # 50-2600 nm in Angstroms
             throughput = np.ones(len(wavelengths))
-            array_bp = SpectralElement(Empirical1D, points=wavelengths, 
-                                     lookup_table=throughput)
+            array_bp = SpectralElement(Empirical1D, points=wavelengths, lookup_table=throughput)
             self.bandpass = self.bandpass * array_bp
             
         self.eff_area = self.bandpass * SpectralElement(ConstFlux1D, 
@@ -239,28 +228,12 @@ class Observatory(object):
         self.lambda_pivot = self.bandpass.pivot()
         self.exposure_time = exposure_time
         self.num_exposures = num_exposures
+        # Should really only be defined for space-based observatories
         self.eclip_lat = eclip_lat
         self.limiting_s_n = limiting_s_n
         plate_scale = 206265 / (self.telescope.focal_length * 10**4)
         self.pix_scale = plate_scale * self.sensor.pix_size
         self.aper_radius = int(aper_radius) if aper_radius is not None else None
-
-    def binset(self, spectrum):
-        '''Narrowest binset from telescope, sensor, filter, and spectrum.'''
-        # In synphot, waveset is the equivalent of wave
-        binset_list = []
-        for element in [self.filter_bandpass, self.sensor.qe, 
-                       self.telescope.bandpass, spectrum]:
-            if hasattr(element, 'waveset') and element.waveset is not None:
-                binset_list.append(element.waveset.value)  # Get numpy array from Quantity
-                
-        if not binset_list:
-            # If no wavesets defined, create a default one
-            return np.arange(3000, 11000, 10)
-            
-        range_list = [np.ptp(x) for x in binset_list]
-        obs_binset = binset_list[np.argmin(range_list)]
-        return obs_binset
 
     def tot_signal(self, spectrum):
         '''The total number of electrons generated in one exposure.
@@ -270,14 +243,9 @@ class Observatory(object):
         spectrum: synphot.SourceSpectrum object
             The spectrum for which to calculate the signal.
         '''
-        # Set the telescope area
         area = np.pi * self.telescope.diam ** 2 / 4 * u.cm ** 2
-        
-        # Create observation with force='extrap' to handle partial overlaps
         obs = Observation(spectrum, self.bandpass, binset=self.bandpass.waveset,
                          force='extrap')
-        
-        # Get count rate - synphot uses different method
         raw_rate = obs.countrate(area=area).value
         signal = raw_rate * self.exposure_time
         return signal
@@ -286,31 +254,15 @@ class Observatory(object):
         '''The background noise per pixel, in e-/pix.'''
         bkg_wave, bkg_ilam = bkg_spectrum_space(self.eclip_lat)
         bkg_flam = bkg_ilam * self.pix_scale ** 2
-        # Convert to synphot SourceSpectrum
         bkg_sp = SourceSpectrum(Empirical1D, points=bkg_wave * u.AA, 
                               lookup_table=bkg_flam * units.FLAM)
         bkg_signal = self.tot_signal(bkg_sp)
         return bkg_signal
 
-    def eff_area_pivot(self):
-        '''The effective photometric area of the observatory at the pivot wavelength, in cm^2.'''
-        tele_area = np.pi * self.telescope.diam ** 2 / 4
-        # Get wavelength array and throughput
-        if self.bandpass.waveset is not None:
-            wave_array = self.bandpass.waveset.to(u.AA).value
-            throughput_array = self.bandpass(self.bandpass.waveset)
-            pivot_throughput = np.interp(self.lambda_pivot.to(u.AA).value,
-                                       wave_array, throughput_array)
-        else:
-            pivot_throughput = 1.0
-        eff_area = tele_area * pivot_throughput
-        return eff_area
-
     def psf_fwhm_um(self):
         '''The full width at half maximum of the PSF, in microns.'''
-        # Convert pivot wavelength to Angstroms for calculation
-        pivot_ang = self.lambda_pivot.to(u.AA).value
-        diff_lim_fwhm = 1.025 * pivot_ang * self.telescope.f_num / 10 ** 4
+        pivot_ang = self.lambda_pivot.to(u.um).value
+        diff_lim_fwhm = 1.025 * pivot_ang * self.telescope.f_num
         if self.telescope.psf_type == 'airy':
             fwhm = diff_lim_fwhm
         elif self.telescope.psf_type == 'gaussian':
@@ -380,36 +332,15 @@ class Observatory(object):
     def saturating_mag(self):
         '''The saturating AB magnitude for the observatory.'''
         # We consider just the central pixel, which will saturate first.
-        mag_10_spectrum = SourceSpectrum(ConstFlux1D, amplitude=10 * u.ABmag)
-        mag_10_signal = self.single_pix_signal(mag_10_spectrum)
         bkg_signal = self.bkg_per_pix()
         dark_noise = self.sensor.dark_current * self.exposure_time
         if (bkg_signal + dark_noise) >= self.sensor.full_well:
             raise ValueError('Noise itself saturates detector')
 
-        def saturation_diff(mag):
-            '''Difference between the pixel signal and full well capacity.'''
-            signal = mag_10_signal * 10 ** ((10 - mag) / 2.5)
-            return signal + bkg_signal + dark_noise - self.sensor.full_well
-
-        # Newton-Raphson method for root-finding
-        mag_tol, sig_tol = 0.01, 10
-        i = 1
-        mag = 10
-        mag_deriv_step = 0.01
-        eps_mag = 1
-        eps_sig = saturation_diff(mag)
-        while abs(eps_sig) > sig_tol:
-            if abs(eps_mag) < mag_tol:
-                raise RuntimeError('No convergence to within 0.01 mag.')
-            elif i > 100:
-                raise RuntimeError('No convergence after 100 iterations.')
-            eps_sig_prime = ((saturation_diff(mag + mag_deriv_step) - eps_sig)
-                             / mag_deriv_step)
-            eps_mag = eps_sig / eps_sig_prime
-            mag -= eps_mag
-            eps_sig = saturation_diff(mag)
-            i += 1
+        remaining_well = self.sensor.full_well - bkg_signal - dark_noise
+        mag_10_spectrum = SourceSpectrum(ConstFlux1D, amplitude=10 * u.ABmag)
+        mag_10_signal = self.single_pix_signal(mag_10_spectrum)
+        mag = 10 - 2.5 * np.log10(remaining_well / mag_10_signal)
         return mag
 
     def signal_grid_fine(self, spectrum, pos=np.array([0, 0]),
@@ -540,6 +471,16 @@ class Observatory(object):
                 else:
                     aper_found = True
             return optimal_aper
+        
+    def zero_point_mag(self):
+        '''The zero point magnitude for the observation.'''
+        # Start at the saturating magnitude
+        sat_mag = self.saturating_mag()
+        spectrum = SourceSpectrum(ConstFlux1D, amplitude=sat_mag * u.ABmag)
+        counts_at_sat_mag = self.observe(spectrum)['signal']
+        counts_at_sat_mag /= (self.exposure_time * self.num_exposures)
+        zp_mag = sat_mag + 2.5 * np.log10(counts_at_sat_mag)
+        return zp_mag
 
     def observe(self, spectrum, pos=np.array([0, 0]), img_size=11, resolution=11):
         '''Determine the signal and noise for observation of a point source.

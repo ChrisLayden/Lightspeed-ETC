@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 data_folder = os.path.dirname(__file__) + '/../data/'
 
 # Defining sensors
-# Sensor dark currents given at -25 deg C, extrapolated from QHY600 data
+# Sensor dark currents given at -25 deg C
 imx455_qe = SpectralElement.from_file(data_folder + 'imx455.fits')
 imx455 = Sensor(pix_size=3.76, read_noise=1.65, dark_current=1.5*10**-3,
                 full_well=51000, qe=imx455_qe)
@@ -24,7 +24,7 @@ cosmos = Sensor(pix_size=10, read_noise=1.0, dark_current=0.005, full_well=80000
 qcmos_arr = np.genfromtxt(data_folder + 'qCMOS_QE.csv', delimiter=',')
 qcmos_qe = SpectralElement(Empirical1D, points=qcmos_arr[:, 0] * 10 * u.AA,
                          lookup_table=qcmos_arr[:, 1])
-qcmos = Sensor(pix_size=4.6, read_noise=0.29, dark_current=0.004, full_well=7000,
+qcmos = Sensor(pix_size=4.6, read_noise=0.56, dark_current=0.004, full_well=7000,
                qe=qcmos_qe)
 
 basic_sensor = Sensor(pix_size=10, read_noise=10, dark_current=0.01,
@@ -63,12 +63,15 @@ telescope_dict_lightspeed = {'Define New Telescope': basic_tele,
 
 # Defining filters
 no_filter = SpectralElement(ConstFlux1D, amplitude=1.0)
-johnson_u = SpectralElement.from_filter('johnson_u')
-johnson_b = SpectralElement.from_filter('johnson_b')
-johnson_v = SpectralElement.from_filter('johnson_v')
-johnson_r = SpectralElement.from_filter('johnson_r')
-johnson_i = SpectralElement.from_filter('johnson_i')
-johnson_j = SpectralElement.from_filter('johnson_j')
+# Johnson filters will be downloaded by synphot if not already.
+# Currently unused for Lightspeed, so commented out to prevent
+# unnecessary downloads.
+# johnson_u = SpectralElement.from_filter('johnson_u')
+# johnson_b = SpectralElement.from_filter('johnson_b')
+# johnson_v = SpectralElement.from_filter('johnson_v')
+# johnson_r = SpectralElement.from_filter('johnson_r')
+# johnson_i = SpectralElement.from_filter('johnson_i')
+# johnson_j = SpectralElement.from_filter('johnson_j')
 # Array with uniform total transmission 9000-17000 ang
 swir_wave = np.arange(9000, 17000, 100)
 swir_thru = np.ones(len(swir_wave))
@@ -121,14 +124,14 @@ vis_filter = SpectralElement(Empirical1D,
                            points=vis_filt_arr[:, 0] * u.AA,
                            lookup_table=vis_filt_arr[:, 1])
 
-filter_dict_gb = {'None': no_filter, 'Johnson U': johnson_u,
-                  'Johnson B': johnson_b, 'Johnson V': johnson_v,
-                  'Johnson R': johnson_r, 'Johnson I': johnson_i,
-                  'Johnson J': johnson_j, 
-                  'Sloan Uprime': sloan_uprime, 'Sloan Gprime': sloan_gprime,
-                  'Sloan Rprime': sloan_rprime,
-                  'SWIR (900-1700 nm 100%)': swir_filter,
-                  'Visible (400-700 nm 100%)': vis_filter}
+# filter_dict_gb = {'None': no_filter, 'Johnson U': johnson_u,
+#                   'Johnson B': johnson_b, 'Johnson V': johnson_v,
+#                   'Johnson R': johnson_r, 'Johnson I': johnson_i,
+#                   'Johnson J': johnson_j, 
+#                   'Sloan Uprime': sloan_uprime, 'Sloan Gprime': sloan_gprime,
+#                   'Sloan Rprime': sloan_rprime,
+#                   'SWIR (900-1700 nm 100%)': swir_filter,
+#                   'Visible (400-700 nm 100%)': vis_filter}
 
 filter_dict_lightspeed = {"None": no_filter, "Sloan u'": sloan_uprime,
                           "Sloan g'": sloan_gprime, "Sloan r'": sloan_rprime,
@@ -147,59 +150,56 @@ if __name__ == '__main__':
     xpoints_oiii = np.arange(485, 515, 0.5)
     ypoints_oiii = 0.97 * np.exp(-0.5 * ((xpoints_oiii - 500.7) / 3.822)**2)
     plt.rcParams.update({'font.size': 14})
-    plt.figure(figsize=(12, 6))
-    plt.plot(sloan_uprime.waveset.to(u.nm).value, sloan_uprime(sloan_uprime.waveset) * 100, 'b--', label='SDSS u\'', alpha=0.5)
-    plt.plot(sloan_gprime.waveset.to(u.nm).value, sloan_gprime(sloan_gprime.waveset) * 100, 'g--', label='SDSS g\'', alpha=0.5)
-    plt.plot(sloan_rprime.waveset.to(u.nm).value, sloan_rprime(sloan_rprime.waveset) * 100, 'r--', label='SDSS r\'', alpha=0.5)
-    plt.plot(sloan_iprime.waveset.to(u.nm).value, sloan_iprime(sloan_iprime.waveset) * 100, 'm--', label='SDSS i\'', alpha=0.5)
-    plt.plot(sloan_zprime.waveset.to(u.nm).value, sloan_zprime(sloan_zprime.waveset) * 100, 'c--', label='SDSS z\'', alpha=0.5)
-    plt.plot(xpoints_oiii, ypoints_oiii * 100, '-.', color='darkorange', label='Baader OIII', alpha=0.5)
-    plt.plot(ha_filter.waveset.to(u.nm).value, ha_filter(ha_filter.waveset) * 100, '-.', color='darkred', label=r'Alluxa $H_\alpha$', alpha=0.5)
-    # plt.plot(atmo_bandpass.waveset.to(u.nm).value, atmo_bandpass(atmo_bandpass.waveset) * 100, 'k:', label='Atmosphere', alpha=0.5)
-    plt.plot(qcmos_qe.waveset.to(u.nm).value, qcmos_qe(qcmos_qe.waveset) * 100, 'k', label='Datasheet QE', alpha=0.5)
-    qCMOS_meas_QE_wavelengths = np.array([296.7, 400., 500., 550., 600., 640., 700., 800., 900., 1000., 1064.])
-    qCMOS_meas_QE = np.array([0.3756, 0.8271, 0.8604, 0.8193, 0.7585, 0.6932, 0.6111, 0.4982, 0.3117, 0.0932, 0.0115])
-    xerr = 5
-    yerr = 0.05 * 100
-    plt.errorbar(qCMOS_meas_QE_wavelengths, qCMOS_meas_QE * 100, xerr=xerr, yerr=yerr, label='Measured QE', fmt='k.', markersize=1)
-    # Put legend above the plot
-    plt.legend(ncols=1, loc='center left', bbox_to_anchor=(0.76, 0.65), fontsize=12)
-    plt.xlabel('Wavelength (nm)')
-    plt.ylabel('Transmission (%)')
-    plt.xlim(250, 1100)
-    plt.ylim(0,100)
-    plt.show()
-    # plt.figure(figsize=(10, 6))
-    # tot_thru_u = sloan_uprime * qcmos_qe * atmo_bandpass * 0.05
-    # tot_thru_g = sloan_gprime * qcmos_qe * atmo_bandpass * 0.57
-    # tot_thru_r = sloan_rprime * qcmos_qe * atmo_bandpass * 0.65
-    # tot_thru_i = sloan_iprime * qcmos_qe * atmo_bandpass * 0.28
-    # tot_thru_z = sloan_zprime * qcmos_qe * atmo_bandpass * 0.06
-    # oiii_filter = SpectralElement(Empirical1D, 
-    #                             points=xpoints_oiii * 10 * u.AA,
-    #                             lookup_table=ypoints_oiii)
-    # tot_thru_oiii = oiii_filter * qcmos_qe * atmo_bandpass * 0.57
-    # tot_thru_halpha = ha_filter * qcmos_qe * atmo_bandpass * 0.65
-    
-    # Plot using waveset and evaluating at waveset points
-    # plt.plot(tot_thru_u.waveset.to(u.nm).value, tot_thru_u(tot_thru_u.waveset) * 100, 'b--', label='SDSS u\'', alpha=0.5)
-    # plt.plot(tot_thru_g.waveset.to(u.nm).value, tot_thru_g(tot_thru_g.waveset) * 100, 'g--', label='SDSS g\'', alpha=0.5)
-    # plt.plot(tot_thru_r.waveset.to(u.nm).value, tot_thru_r(tot_thru_r.waveset) * 100, 'r--', label='SDSS r\'', alpha=0.5)
-    # plt.plot(tot_thru_i.waveset.to(u.nm).value, tot_thru_i(tot_thru_i.waveset) * 100, 'm--', label='SDSS i\'', alpha=0.5)
-    # plt.plot(tot_thru_z.waveset.to(u.nm).value, tot_thru_z(tot_thru_z.waveset) * 100, 'c--', label='SDSS z\'', alpha=0.5)
-    # plt.plot(tot_thru_oiii.waveset.to(u.nm).value, tot_thru_oiii(tot_thru_oiii.waveset) * 100, '-.', color='darkorange', label='Baader OIII', alpha=0.5)
-    # plt.plot(tot_thru_halpha.waveset.to(u.nm).value, tot_thru_halpha(tot_thru_halpha.waveset) * 100, '-.', color='darkred', label='Halpha', alpha=0.5)
-    
-    # Use text to label the 5 curves
-    # plt.text(tot_thru_u.pivot().to(u.nm).value, np.max(tot_thru_u(tot_thru_u.waveset)) * 100 + 0.5, "u'", color='b', ha='center')
-    # plt.text(tot_thru_g.pivot().to(u.nm).value, np.max(tot_thru_g(tot_thru_g.waveset)) * 100 + 0.5, "g'", color='g', ha='center')
-    # plt.text(tot_thru_r.pivot().to(u.nm).value, np.max(tot_thru_r(tot_thru_r.waveset)) * 100 + 0.5, "r'", color='r', ha='center')
-    # plt.text(tot_thru_i.pivot().to(u.nm).value, np.max(tot_thru_i(tot_thru_i.waveset)) * 100 + 0.5, "i'", color='m', ha='center')
-    # plt.text(tot_thru_z.pivot().to(u.nm).value, np.max(tot_thru_z(tot_thru_z.waveset)) * 100 + 0.5, "z'", color='c', ha='center')
-    # plt.text(500.7, np.max(tot_thru_oiii(tot_thru_oiii.waveset)) * 100 + 0.5, "OIII", color='darkorange', ha='center')
-    # plt.text(656.3, np.max(tot_thru_halpha(tot_thru_halpha.waveset)) * 100 + 0.5, r"$H_\alpha$", color='darkred', ha='center')
-    # plt.xlim(300, 1050)
-    # plt.ylim(0.1, 40)
+    # plt.figure(figsize=(12, 6))
+    # plt.plot(sloan_uprime.waveset.to(u.nm).value, sloan_uprime(sloan_uprime.waveset) * 100, 'b--', label='SDSS u\'', alpha=0.5)
+    # plt.plot(sloan_gprime.waveset.to(u.nm).value, sloan_gprime(sloan_gprime.waveset) * 100, 'g--', label='SDSS g\'', alpha=0.5)
+    # plt.plot(sloan_rprime.waveset.to(u.nm).value, sloan_rprime(sloan_rprime.waveset) * 100, 'r--', label='SDSS r\'', alpha=0.5)
+    # plt.plot(sloan_iprime.waveset.to(u.nm).value, sloan_iprime(sloan_iprime.waveset) * 100, 'm--', label='SDSS i\'', alpha=0.5)
+    # plt.plot(sloan_zprime.waveset.to(u.nm).value, sloan_zprime(sloan_zprime.waveset) * 100, 'c--', label='SDSS z\'', alpha=0.5)
+    # plt.plot(xpoints_oiii, ypoints_oiii * 100, '-.', color='darkorange', label='Baader OIII', alpha=0.5)
+    # plt.plot(ha_filter.waveset.to(u.nm).value, ha_filter(ha_filter.waveset) * 100, '-.', color='darkred', label=r'Alluxa $H_\alpha$', alpha=0.5)
+    # # plt.plot(atmo_bandpass.waveset.to(u.nm).value, atmo_bandpass(atmo_bandpass.waveset) * 100, 'k:', label='Atmosphere', alpha=0.5)
+    # plt.plot(qcmos_qe.waveset.to(u.nm).value, qcmos_qe(qcmos_qe.waveset) * 100, 'k', label='Datasheet QE', alpha=0.5)
+    # qCMOS_meas_QE_wavelengths = np.array([296.7, 400., 500., 550., 600., 640., 700., 800., 900., 1000., 1064.])
+    # qCMOS_meas_QE = np.array([0.3756, 0.8271, 0.8604, 0.8193, 0.7585, 0.6932, 0.6111, 0.4982, 0.3117, 0.0932, 0.0115])
+    # xerr = 5
+    # yerr = 0.05 * 100
+    # plt.errorbar(qCMOS_meas_QE_wavelengths, qCMOS_meas_QE * 100, xerr=xerr, yerr=yerr, label='Measured QE', fmt='k.', markersize=1)
+    # # Put legend above the plot
+    # plt.legend(ncols=1, loc='center left', bbox_to_anchor=(0.76, 0.65), fontsize=12)
     # plt.xlabel('Wavelength (nm)')
     # plt.ylabel('Transmission (%)')
+    # plt.xlim(250, 1100)
+    # plt.ylim(0,100)
     # plt.show()
+    plt.figure(figsize=(10, 6))
+    tot_thru_u = sloan_uprime * qcmos_qe * atmo_bandpass * 0.05
+    tot_thru_g = sloan_gprime * qcmos_qe * atmo_bandpass * 0.57
+    tot_thru_r = sloan_rprime * qcmos_qe * atmo_bandpass * 0.65
+    tot_thru_i = sloan_iprime * qcmos_qe * atmo_bandpass * 0.28
+    tot_thru_z = sloan_zprime * qcmos_qe * atmo_bandpass * 0.06
+    oiii_filter = SpectralElement(Empirical1D, 
+                                points=xpoints_oiii * 10 * u.AA,
+                                lookup_table=ypoints_oiii)
+    tot_thru_oiii = oiii_filter * qcmos_qe * atmo_bandpass * 0.57
+    tot_thru_halpha = ha_filter * qcmos_qe * atmo_bandpass * 0.65
+    
+    plt.plot(tot_thru_u.waveset.to(u.nm).value, tot_thru_u(tot_thru_u.waveset) * 100, 'b--', label='SDSS u\'', alpha=0.5)
+    plt.plot(tot_thru_g.waveset.to(u.nm).value, tot_thru_g(tot_thru_g.waveset) * 100, 'g--', label='SDSS g\'', alpha=0.5)
+    plt.plot(tot_thru_r.waveset.to(u.nm).value, tot_thru_r(tot_thru_r.waveset) * 100, 'r--', label='SDSS r\'', alpha=0.5)
+    plt.plot(tot_thru_i.waveset.to(u.nm).value, tot_thru_i(tot_thru_i.waveset) * 100, 'm--', label='SDSS i\'', alpha=0.5)
+    plt.plot(tot_thru_z.waveset.to(u.nm).value, tot_thru_z(tot_thru_z.waveset) * 100, 'c--', label='SDSS z\'', alpha=0.5)
+    plt.plot(tot_thru_oiii.waveset.to(u.nm).value, tot_thru_oiii(tot_thru_oiii.waveset) * 100, '-.', color='darkorange', label='Baader OIII', alpha=0.5)
+    plt.plot(tot_thru_halpha.waveset.to(u.nm).value, tot_thru_halpha(tot_thru_halpha.waveset) * 100, '-.', color='darkred', label='Halpha', alpha=0.5)
+    plt.text(tot_thru_u.pivot().to(u.nm).value, np.max(tot_thru_u(tot_thru_u.waveset)) * 100 + 0.5, "u'", color='b', ha='center')
+    plt.text(tot_thru_g.pivot().to(u.nm).value, np.max(tot_thru_g(tot_thru_g.waveset)) * 100 + 0.5, "g'", color='g', ha='center')
+    plt.text(tot_thru_r.pivot().to(u.nm).value, np.max(tot_thru_r(tot_thru_r.waveset)) * 100 + 0.5, "r'", color='r', ha='center')
+    plt.text(tot_thru_i.pivot().to(u.nm).value, np.max(tot_thru_i(tot_thru_i.waveset)) * 100 + 0.5, "i'", color='m', ha='center')
+    plt.text(tot_thru_z.pivot().to(u.nm).value, np.max(tot_thru_z(tot_thru_z.waveset)) * 100 + 0.5, "z'", color='c', ha='center')
+    plt.text(500.7, np.max(tot_thru_oiii(tot_thru_oiii.waveset)) * 100 + 0.5, "OIII", color='darkorange', ha='center')
+    plt.text(656.3, np.max(tot_thru_halpha(tot_thru_halpha.waveset)) * 100 + 0.5, r"$H_\alpha$", color='darkred', ha='center')
+    plt.xlim(300, 1050)
+    plt.ylim(0.1, 40)
+    plt.xlabel('Wavelength (nm)')
+    plt.ylabel('Transmission (%)')
+    plt.show()
