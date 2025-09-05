@@ -1,7 +1,7 @@
 # Lightspeed-ETC
 An exposure time calculator for the Lightspeed instrument planned for installation on the Magellan Clay Telescope.
 
-Requires synphot, matplotlib, astropy, numpy, and scipy.
+Requires matplotlib and synphot (synphot also installs astropy, numpy, and scipy).
 
 CPL 04/23/2025
 
@@ -9,7 +9,7 @@ How to use:
 1) Install synphot: use
 
 ```
-pip install synphot
+pip install synphot matplotlib
 ```
 
 If this doesn't work, see more information at https://synphot.readthedocs.io/en/latest/
