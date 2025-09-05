@@ -13,7 +13,6 @@ pip install synphot
 ```
 
 If this doesn't work, see more information at https://synphot.readthedocs.io/en/latest/
-```
 
 2) To open the Lightspeed ETC, use
 
