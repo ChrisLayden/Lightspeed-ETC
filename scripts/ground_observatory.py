@@ -127,7 +127,7 @@ class GroundObservatory(Observatory):
         return self.exposure_time * read_bkg_ratio ** 2
 
     def get_aper(self, spectrum=None, pos=np.array([0, 0]), img_size=11,
-                     resolution=11, num_aper_frames=1):
+                     resolution=11):
         '''Find the optimal aperture for a given point source.
         
         Parameters
@@ -164,18 +164,24 @@ class GroundObservatory(Observatory):
             aper_found = False
             while not aper_found:
                 signal_grid_fine = self.signal_grid_fine(spectrum, pos, img_size, resolution)
-                intrapix_grid = self.get_intrapix_grid(img_size, resolution,
-                                                       self.sensor.intrapix_sigma)
-                signal_grid_fine *= intrapix_grid
                 signal_grid = signal_grid_fine.reshape((img_size, resolution,
                                                         img_size, resolution)).sum(axis=(1, 3))
-                stack_image = signal_grid * num_aper_frames
-                stack_pix_noise = self.single_pix_noise() * np.sqrt(num_aper_frames)
-                # Relative scintillation noise over a stack decreases, because the exposure time
-                # is effectively longer.
-                stack_scint_noise = self.scint_noise / np.sqrt(num_aper_frames)
-                optimal_aper = psfs.get_optimal_aperture(stack_image, stack_pix_noise,
-                                                        scint_noise=stack_scint_noise)
+                if self.sensor.nonlinearity_scaleup is not None:
+                    dark_signal = self.sensor.dark_current * self.exposure_time + self.bkg_per_pix()
+                    tot_frame = signal_grid * (1 + dark_signal)
+                    pix_scaleup_factors = np.interp(tot_frame,
+                                                    self.sensor.nonlinearity_scaleup[:, 0],
+                                                    self.sensor.nonlinearity_scaleup[:, 1],
+                                                    left=self.sensor.nonlinearity_scaleup[0, 1],
+                                                    right=self.sensor.nonlinearity_scaleup[-1, 1])
+                    optimal_aper = psfs.get_optimal_aperture_nonlinear(signal_grid, read_noise=self.sensor.read_noise,
+                                                             dark_signal=dark_signal,
+                                                             pix_scaleup_factors=pix_scaleup_factors)
+                else:
+                    optimal_aper = psfs.get_optimal_aperture(signal_grid, self.single_pix_noise(),
+                                                             scint_noise=self.scint_noise)
+                # optimal_aper = psfs.get_optimal_aperture(stack_image, stack_pix_noise,
+                #                                         scint_noise=stack_scint_noise)
                 aper_pads = psfs.get_aper_padding(optimal_aper)
                 if min(aper_pads) > 0:
                     aper_found = True
@@ -184,7 +190,7 @@ class GroundObservatory(Observatory):
             return optimal_aper
 
     def observe(self, spectrum, pos=np.array([0, 0]), img_size=11,
-                resolution=11, num_aper_frames=1):
+                resolution=11):
         '''Determine the signal and noise for observation of a point source.
 
         Parameters
@@ -203,10 +209,6 @@ class GroundObservatory(Observatory):
             The number of sub-pixels per pixel. Should be odd, so that
             [0,0] represents the center of the central subpixel.
             If it isn't odd, we'll just add one.
-        num_aper_frames: int (default 1)
-            The number of frames to be stacked before calculating the
-            optimal aperture. The default means we just find the optimal
-            aperture for a single exposure.
 
         Returns
         -------
@@ -218,21 +220,36 @@ class GroundObservatory(Observatory):
         '''
         # For a realistic image with all noise sources, use the get_images method.
         # Here we just summarize signal and noise characteristics.
-        optimal_aper = self.get_aper(spectrum, pos, img_size, resolution,
-                                         num_aper_frames=num_aper_frames)
+        optimal_aper = self.get_aper(spectrum, pos, img_size, resolution)
         img_size = optimal_aper.shape[0]
         signal_grid_fine = self.signal_grid_fine(spectrum, pos, img_size, resolution)
-        intrapix_grid = self.get_intrapix_grid(img_size, resolution, self.sensor.intrapix_sigma)
-        signal_grid_fine *= intrapix_grid
         signal_grid = signal_grid_fine.reshape((img_size, resolution,
                                                 img_size, resolution)).sum(axis=(1, 3))
         signal = np.sum(signal_grid * optimal_aper) * self.num_exposures
         n_aper = np.sum(optimal_aper)
-        shot_noise = np.sqrt(signal)
-        dark_noise = np.sqrt(n_aper * self.num_exposures *
-                             self.sensor.dark_current * self.exposure_time)
-        bkg_noise = np.sqrt(n_aper * self.num_exposures * self.bkg_per_pix())
-        read_noise = np.sqrt(n_aper * self.num_exposures * self.sensor.read_noise ** 2)
+        if self.sensor.nonlinearity_scaleup is not None:
+            # Adjust shot and read noise for sensor nonlinearity
+            tot_frame = signal_grid * optimal_aper * (1 + self.sensor.dark_current * self.exposure_time +
+                                self.bkg_per_pix())
+            pix_scaleup_factors = np.interp(tot_frame, self.sensor.nonlinearity_scaleup[:, 0],
+                                            self.sensor.nonlinearity_scaleup[:, 1],
+                                            left=self.sensor.nonlinearity_scaleup[0, 1],
+                                            right=self.sensor.nonlinearity_scaleup[-1, 1])
+            pix_scaleup_factors = optimal_aper * pix_scaleup_factors
+            pix_read_var_vals = (pix_scaleup_factors * self.sensor.read_noise) ** 2
+            pix_shot_var_vals = tot_frame * pix_scaleup_factors
+            pix_dark_noise_vals = self.sensor.dark_current * self.exposure_time * pix_scaleup_factors
+            bkg_noise_vals = self.bkg_per_pix() * pix_scaleup_factors
+            read_noise = np.sqrt(np.sum(pix_read_var_vals) * self.num_exposures)
+            shot_noise = np.sqrt(np.sum(pix_shot_var_vals) * self.num_exposures)
+            dark_noise = np.sqrt(np.sum(pix_dark_noise_vals) * self.num_exposures)
+            bkg_noise = np.sqrt(np.sum(bkg_noise_vals) * self.num_exposures)
+        else:
+            shot_noise = np.sqrt(signal)
+            dark_noise = np.sqrt(n_aper * self.num_exposures *
+                                self.sensor.dark_current * self.exposure_time)
+            bkg_noise = np.sqrt(n_aper * self.num_exposures * self.bkg_per_pix())
+            read_noise = np.sqrt(n_aper * self.num_exposures * self.sensor.read_noise ** 2)
         scint_noise = signal * self.scint_noise / np.sqrt(self.num_exposures)
         tot_noise = np.sqrt(shot_noise ** 2 + dark_noise ** 2 + scint_noise ** 2 +
                             bkg_noise ** 2 + read_noise ** 2)
@@ -245,15 +262,10 @@ class GroundObservatory(Observatory):
 
 
 if __name__ == '__main__':
-    data_folder = os.path.dirname(__file__) + '/../data/'
-    sensor_bandpass = SpectralElement.from_file(data_folder + 'imx455.fits')
-    imx455 = Sensor(pix_size=2.74, read_noise=1, dark_current=0.005,
-                    full_well=51000, qe=sensor_bandpass,
-                    intrapix_sigma=6)
-    magellan_telescope = Telescope(diam=650, f_num=2)
-    magellan = GroundObservatory(sensor=imx455, telescope=magellan_telescope,
+    from instruments import qcmos, magellan_tele_prototype, sloan_gprime
+    prototype = GroundObservatory(sensor=qcmos, telescope=magellan_tele_prototype,
+                                 filter_bandpass=sloan_gprime,
                                  altitude=2, exposure_time=0.1,
-                                 seeing=0.5, alpha=180, zo=0, rho=45,
-                                 aper_radius=10)
+                                 seeing=0.5, alpha=180, zo=0, rho=45)
     my_spectrum = SourceSpectrum(ConstFlux1D, amplitude=20 * u.ABmag)
-    print(magellan.observe(my_spectrum))
+    print(prototype.observe(my_spectrum))

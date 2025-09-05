@@ -67,7 +67,8 @@ class Sensor(object):
 
     def __init__(self, pix_size, read_noise, dark_current,
                  qe=SpectralElement(ConstFlux1D, amplitude=1.0),
-                 full_well=100000, intrapix_sigma=np.inf):
+                 full_well=100000, intrapix_sigma=np.inf,
+                 nonlinearity_scaleup=None):
         '''Initialize a Sensor object.
 
         Parameters
@@ -87,6 +88,12 @@ class Sensor(object):
             each individual pixel, in um, modeling this intrapixel
             response as a Gaussian. If not specified, the intrapixel
             response is assumed to be flat (so intrapix_sigma is infinite).
+        nonlinearity_scaleup: 2D array-like (default None)
+            The factor by which the signal value must have been scaled up
+            to yield linear sensor response, as a function of the corrected
+            signal value in e-. This affects the effective read noise and shot noise.
+            Typically only relevant for CMOS image sensors. For discussion, see
+            Layden et al. 2025 https://doi.org/10.1117/1.JATIS.11.2.026003
         '''     
         self.pix_size = pix_size
         self.read_noise = read_noise
@@ -94,6 +101,7 @@ class Sensor(object):
         self.full_well = full_well
         self.qe = qe
         self.intrapix_sigma = intrapix_sigma
+        self.nonlinearity_scaleup = nonlinearity_scaleup
 
     @property
     def qe(self):
@@ -462,7 +470,19 @@ class Observatory(object):
                 initial_grid = self.signal_grid_fine(spectrum, pos, img_size, resolution)
                 frame = initial_grid.reshape((img_size, resolution, img_size,
                                             resolution)).sum(axis=(1, 3))
-                optimal_aper = psfs.get_optimal_aperture(frame, self.single_pix_noise())
+                if self.sensor.nonlinearity_scaleup is not None:
+                    dark_signal = self.sensor.dark_current * self.exposure_time + self.bkg_per_pix()
+                    tot_frame = frame * (1 + dark_signal)
+                    pix_scaleup_factors = np.interp(tot_frame * optimal_aper,
+                                                    self.sensor.nonlinearity_scaleup[:, 0],
+                                                    self.sensor.nonlinearity_scaleup[:, 1],
+                                                    left=self.sensor.nonlinearity_scaleup[0, 1],
+                                                    right=self.sensor.nonlinearity_scaleup[-1, 1])
+                    optimal_aper = psfs.get_optimal_aperture(frame, read_noise=self.sensor.read_noise,
+                                                             dark_signal=dark_signal,
+                                                             pix_scaleup_factors=pix_scaleup_factors)
+                else:
+                    optimal_aper = psfs.get_optimal_aperture(frame, self.single_pix_noise())
                 # Get the number of non-aperture pixels around the aperture to check
                 # that the full optimal aperture is found.
                 aper_pads = psfs.get_aper_padding(optimal_aper)
@@ -522,14 +542,29 @@ class Observatory(object):
         intrapix_sigma = self.sensor.intrapix_sigma
         intrapix_grid = self.get_intrapix_grid(img_size, resolution, intrapix_sigma)
         initial_grid *= intrapix_grid
-        frame = initial_grid.reshape((img_size, resolution, img_size,
+        signal_grid = initial_grid.reshape((img_size, resolution, img_size,
                                       resolution)).sum(axis=(1, 3))
-        signal = np.sum(frame * aper) * self.num_exposures
-        shot_noise = np.sqrt(signal)
-        dark_noise = np.sqrt(n_aper * self.num_exposures *
-                             self.sensor.dark_current * self.exposure_time)
-        bkg_noise = np.sqrt(n_aper * self.num_exposures * self.bkg_per_pix())
-        read_noise = np.sqrt(n_aper * self.num_exposures * self.sensor.read_noise ** 2)
+        signal = np.sum(signal_grid * aper) * self.num_exposures
+        if self.sensor.nonlinearity_scaleup is not None:
+            # Adjust shot and read noise for sensor nonlinearity
+            tot_frame = signal_grid * aper * (1 + self.sensor.dark_current * self.exposure_time +
+                                self.bkg_per_pix())
+            pix_scaleup_factors = np.interp(tot_frame * aper, self.sensor.nonlinearity_scaleup[:, 0],
+                                            self.sensor.nonlinearity_scaleup[:, 1], left=1, right=1)
+            pix_read_var_vals = (pix_scaleup_factors * self.sensor.read_noise) ** 2
+            pix_shot_var_vals = tot_frame * pix_scaleup_factors
+            pix_dark_noise_vals = self.sensor.dark_current * self.exposure_time * pix_scaleup_factors
+            bkg_noise_vals = self.bkg_per_pix() * pix_scaleup_factors
+            read_noise = np.sqrt(np.sum(pix_read_var_vals) * self.num_exposures)
+            shot_noise = np.sqrt(np.sum(pix_shot_var_vals) * self.num_exposures)
+            dark_noise = np.sqrt(np.sum(pix_dark_noise_vals) * self.num_exposures)
+            bkg_noise = np.sqrt(np.sum(bkg_noise_vals) * self.num_exposures)
+        else:
+            shot_noise = np.sqrt(signal)
+            dark_noise = np.sqrt(n_aper * self.num_exposures *
+                                self.sensor.dark_current * self.exposure_time)
+            bkg_noise = np.sqrt(n_aper * self.num_exposures * self.bkg_per_pix())
+            read_noise = np.sqrt(n_aper * self.num_exposures * self.sensor.read_noise ** 2)
         tot_noise = np.sqrt(shot_noise ** 2 + dark_noise ** 2 +
                             bkg_noise ** 2 + read_noise ** 2)
         results_dict = {'signal': signal, 'tot_noise': tot_noise,

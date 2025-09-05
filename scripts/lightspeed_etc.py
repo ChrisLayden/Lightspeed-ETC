@@ -10,7 +10,7 @@ from synphot.units import FLAM
 import numpy as np
 import matplotlib.pyplot as plt
 from spectra import *
-from observatory import Sensor, Telescope, Observatory
+from observatory import Sensor, Telescope
 from ground_observatory import GroundObservatory
 from instruments import sensor_dict_lightspeed, telescope_dict_lightspeed, filter_dict_lightspeed, atmo_bandpass
 
@@ -41,6 +41,7 @@ class MyGUI:
                           'read_noise': ['Read Noise (e-/pix)'],
                           'dark_current': ['Dark Current (e-/pix/s)'],
                           'qe': ['Quantum Efficiency'],
+                          'nonlinearity_scaleup': ['Nonlinearity Scale Factor'],
                           'full_well': ['Full Well Capacity']}
         for i, (key, value) in enumerate(self.sens_vars.items()):
             if key == 'name':
@@ -62,7 +63,7 @@ class MyGUI:
         # Defining telescope properties
         self.tele_header = tk.Label(self.root, text='Telescope Properties',
                                     font=['Arial', 16, 'bold'])
-        self.tele_header.grid(row=7, column=0, columnspan=2, padx=PADX,
+        self.tele_header.grid(row=8, column=0, columnspan=2, padx=PADX,
                               pady=PADY)
         # Similarly, make a dictionary for telescope properties.
         self.tele_options = list(telescope_dict_lightspeed.keys())
@@ -74,21 +75,21 @@ class MyGUI:
         for i, (key, value) in enumerate(self.tele_vars.items()):
             if key == 'name':
                 value.append(tk.Label(self.root, text=value[0]))
-                value[1].grid(row=i+8, column=0, padx=PADX, pady=PADY)
+                value[1].grid(row=i+9, column=0, padx=PADX, pady=PADY)
                 value.append(tk.StringVar())
                 value[2].trace_add('write', self.set_tele)
                 value[2].trace_add('write', self.clear_results)
                 value[2].trace_add('write', self.update_altitude)
                 value[2].trace_add('write', self.update_reimaging_throughput)
                 value.append(tk.OptionMenu(self.root, value[2], *self.tele_options))
-                value[3].grid(row=i+8, column=1, padx=PADX, pady=PADY)
+                value[3].grid(row=i+9, column=1, padx=PADX, pady=PADY)
             else:
                 value.append(tk.Label(self.root, text=value[0]))
-                value[1].grid(row=i+8, column=0, padx=PADX, pady=PADY)
+                value[1].grid(row=i+9, column=0, padx=PADX, pady=PADY)
                 value.append(tk.DoubleVar())
                 value[2].trace_add('write', self.clear_results)
                 value.append(tk.Entry(self.root, width=10, textvariable=value[2]))
-                value[3].grid(row=i+8, column=1, padx=PADX, pady=PADY)
+                value[3].grid(row=i+9, column=1, padx=PADX, pady=PADY)
 
         # Defining observing properties
         self.obs_header = tk.Label(self.root, text='Observing Properties',
@@ -297,8 +298,19 @@ class MyGUI:
             self.sens_vars['qe'][3].config(state='disabled')
         else:
             self.sens_vars['qe'][2] = tk.DoubleVar()
+            self.sens_vars['qe'][2].set(self.sens.qe(5000 * u.AA).to_value())
             self.sens_vars['qe'][3].config(textvariable=self.sens_vars['qe'][2])
             self.sens_vars['qe'][3].config(state='normal')
+        if self.sens.nonlinearity_scaleup is not None:
+            self.sens_vars['nonlinearity_scaleup'][2] = tk.StringVar()
+            self.sens_vars['nonlinearity_scaleup'][2].set('ARRAY')
+            self.sens_vars['nonlinearity_scaleup'][3].config(textvariable=self.sens_vars['nonlinearity_scaleup'][2])
+            self.sens_vars['nonlinearity_scaleup'][3].config(state='disabled')
+        else:
+            self.sens_vars['nonlinearity_scaleup'][2] = tk.DoubleVar()
+            self.sens_vars['nonlinearity_scaleup'][2].set(1.0)
+            self.sens_vars['nonlinearity_scaleup'][3].config(textvariable=self.sens_vars['nonlinearity_scaleup'][2])
+            self.sens_vars['nonlinearity_scaleup'][3].config(state='normal')
 
     def set_tele(self, *_):
         '''Set the telescope based on the selected telescope name.'''
@@ -317,11 +329,15 @@ class MyGUI:
             qe = self.sens.qe
         else:
             qe = SpectralElement(ConstFlux1D, amplitude=float(self.sens_vars['qe'][2].get()))
+        if self.sens_vars['nonlinearity_scaleup'][2].get() == 'ARRAY':
+            nonlinearity_scaleup = self.sens.nonlinearity_scaleup
+        else:
+            nonlinearity_scaleup = None
         sens = Sensor(pix_size=self.sens_vars['pix_size'][2].get(),
                       read_noise=self.sens_vars['read_noise'][2].get(),
                       dark_current=self.sens_vars['dark_current'][2].get(),
                       full_well=self.sens_vars['full_well'][2].get(),
-                      qe=qe)
+                      qe=qe, nonlinearity_scaleup=nonlinearity_scaleup)
         tele = Telescope(diam=self.tele_vars['diam'][2].get(),
                          f_num=self.tele_vars['f_num'][2].get(),
                          bandpass=self.tele_vars['bandpass'][2].get())
@@ -456,10 +472,9 @@ class MyGUI:
         ppm_points_dc = np.zeros_like(mag_points)
         ppm_points_scint = np.zeros_like(mag_points)
         observatory = self.set_obs()
-        img_size = 11
         for i, mag in enumerate(mag_points):
             spectrum = SourceSpectrum(ConstFlux1D, amplitude=mag * u.ABmag)
-            results = observatory.observe(spectrum, img_size=img_size)
+            results = observatory.observe(spectrum)
             snr = results['signal'] / results['tot_noise']
             phot_prec = 10 ** 6 / snr
             ppm_points[i] = phot_prec

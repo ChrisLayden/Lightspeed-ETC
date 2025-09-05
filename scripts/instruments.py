@@ -14,7 +14,7 @@ data_folder = os.path.dirname(__file__) + '/../data/'
 imx455_qe = SpectralElement.from_file(data_folder + 'imx455.fits')
 imx455 = Sensor(pix_size=3.76, read_noise=1.65, dark_current=1.5*10**-3,
                 full_well=51000, qe=imx455_qe)
-
+# Have not implemented severe nonlinearity scaling for COSMOS
 cosmos_arr = np.genfromtxt(data_folder + 'cosmos_qe_datasheet.csv', delimiter=',')
 cosmos_qe = SpectralElement(Empirical1D, points=cosmos_arr[:, 0] * 10 * u.AA,
                           lookup_table=cosmos_arr[:, 1])
@@ -24,11 +24,12 @@ cosmos = Sensor(pix_size=10, read_noise=1.0, dark_current=0.005, full_well=80000
 qcmos_arr = np.genfromtxt(data_folder + 'qCMOS_QE.csv', delimiter=',')
 qcmos_qe = SpectralElement(Empirical1D, points=qcmos_arr[:, 0] * 10 * u.AA,
                          lookup_table=qcmos_arr[:, 1])
-qcmos = Sensor(pix_size=4.6, read_noise=0.56, dark_current=0.004, full_well=7000,
-               qe=qcmos_qe)
+qcmos_nonlinearity = np.genfromtxt(data_folder + 'qCMOS_nonlinearity_scaling.csv', delimiter=',', skip_header=1)
+qcmos = Sensor(pix_size=4.6, read_noise=0.28, dark_current=0.004, full_well=7000,
+               qe=qcmos_qe, nonlinearity_scaleup= qcmos_nonlinearity)
 
 basic_sensor = Sensor(pix_size=10, read_noise=10, dark_current=0.01,
-                      full_well=100000)
+                      full_well=100000, qe=SpectralElement(ConstFlux1D, amplitude=0.5))
 
 # Sensor dictionary for ground-based observatories
 sensor_dict_gb = {'Define New Sensor': basic_sensor, 'Sony IMX 455': imx455,

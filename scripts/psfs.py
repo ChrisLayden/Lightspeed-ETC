@@ -240,7 +240,63 @@ def get_optimal_aperture(psf_grid, noise_per_pix, scint_noise=0):
             n_aper += 1
         else:
             break
+    return aperture_grid
 
+def get_optimal_aperture_nonlinear(psf_grid, read_noise=0, dark_signal=0, scint_noise=0,
+                                   pix_scaleup_factors=None):
+    '''The optimal aperture for maximizing S/N.
+
+    Parameters
+    ----------
+    psf_grid: array-like
+        The signal recorded in each pixel
+    noise_per_pix: float
+        The noise per pixel, besides source shot noise.
+    scint_noise: float
+        The scintillation noise, in fractional amplitude. The
+        scintillation noise in electrons in a given pixel is
+        this value times the signal in that pixel.
+    nonlinearity_scaleup: array-like
+        An array the same shape as psf_grid that gives the factor
+        by which the shot noise and read noise are increased in each
+        pixel due to sensor nonlinearity.
+
+    Returns
+    -------
+    aperture_grid: array-like
+        A grid of 1s and 0s, where 1s indicate pixels that are
+        included in the optimal aperture.
+    '''
+
+    # Copy the image to a new array so we aren't modifying
+    # the original array
+    func_grid = psf_grid.copy()
+    aperture_grid = np.zeros(psf_grid.shape)
+    n_aper = 0
+    signal = 0
+    snr_max = 0
+    read_var = 0
+    non_scint_var = 0
+    scint_noise_tot = 0
+
+    while n_aper <= func_grid.size:
+        imax, jmax = np.unravel_index(func_grid.argmax(), func_grid.shape)
+        max_sig_remaining = psf_grid[imax, jmax]
+        func_grid[imax, jmax] = -1
+        signal = signal + max_sig_remaining
+        scint_noise_tot = scint_noise_tot + scint_noise * max_sig_remaining
+        read_var += read_noise ** 2 * pix_scaleup_factors[imax, jmax] ** 2
+        non_scint_var += ((max_sig_remaining + dark_signal) * pix_scaleup_factors[imax, jmax] +
+                          read_noise ** 2 * pix_scaleup_factors[imax, jmax] ** 2)
+        noise = np.sqrt(non_scint_var + scint_noise_tot ** 2)
+        snr = signal / noise
+
+        if snr > snr_max:
+            snr_max = snr
+            aperture_grid[imax, jmax] = 1
+            n_aper += 1
+        else:
+            break
     return aperture_grid
 
 def get_aper_padding(aper):
