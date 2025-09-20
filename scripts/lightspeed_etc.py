@@ -229,9 +229,9 @@ class MyGUI:
                               pady=PADY)
         # Set default values
         self.sens = sensor_dict_lightspeed['qCMOS']
-        self.tele = telescope_dict_lightspeed['Magellan Prototype']
+        self.tele = telescope_dict_lightspeed['Clay (proto-Lightspeed)']
         self.sens_vars['name'][2].set('qCMOS')
-        self.tele_vars['name'][2].set('Magellan Prototype')
+        self.tele_vars['name'][2].set('Clay (proto-Lightspeed)')
         self.obs_vars_dict['filter'][2].set('Sloan g\'')
         self.obs_vars_dict['exptime'][2].set(1.0)
         self.obs_vars_dict['num_exposures'][2].set(1)
@@ -252,10 +252,10 @@ class MyGUI:
 
     def update_altitude(self, *_):
         '''Update altitude of the telescope based on the selected telescope'''
-        altitude_dict = {'Magellan': 2516, 'Palomar': 1712}
+        altitude_dict = {'Clay': 2516, 'Palomar': 1712}
         tele_name = self.tele_vars['name'][2].get()
-        if 'Magellan' in tele_name:
-            self.tele_vars['altitude'][2].set(altitude_dict['Magellan'])
+        if 'Clay' in tele_name:
+            self.tele_vars['altitude'][2].set(altitude_dict['Clay'])
         # Check if name is WINTER or Hale. If either, use palomar alt
         elif 'WINTER' in tele_name or 'Hale' in tele_name:
             self.tele_vars['altitude'][2].set(altitude_dict['Palomar'])
@@ -270,9 +270,9 @@ class MyGUI:
         throughput_dict_lightspeed = {'Sloan g\'': 0.85, 'Sloan r\'': 0.85,
                                      'Sloan i\'': 0.85, 'Sloan z\'': 0.85,
                                      'Sloan u\'': 0.85}
-        if tele_name == 'Magellan Prototype':
+        if tele_name == 'Clay (proto-Lightspeed)':
             throughput_dict = throughput_dict_prototype
-        elif tele_name == 'Magellan Lightspeed':
+        elif tele_name == 'Clay (full Lightspeed)':
             throughput_dict = throughput_dict_lightspeed
         else:
             self.obs_vars_dict['reim_throughput'][2].set(1.0)
@@ -319,7 +319,7 @@ class MyGUI:
         self.tele_vars['f_num'][2].set(self.tele.f_num)
         # For constant transmission, get the amplitude value
         if hasattr(self.tele.bandpass, 'model') and hasattr(self.tele.bandpass.model, 'amplitude'):
-            self.tele_vars['bandpass'][2].set(self.tele.bandpass.model.amplitude.value)
+            self.tele_vars['bandpass'][2].set(np.round(self.tele.bandpass.model.amplitude.value,3))
         else:
             self.tele_vars['bandpass'][2].set(1.0)
 
@@ -403,7 +403,10 @@ class MyGUI:
             self.basic_results['zero_point'][2] = observatory.zero_point_mag()
             self.basic_results['exptime_turnover'][2] = observatory.turnover_exp_time()
             for key, value in self.basic_results.items():
-                value[3].config(text=format(value[2], '4.3f'))
+                if key in ['lambda_pivot', 'eff_area_pivot']:
+                    value[3].config(text=format(value[2], '5.0f'))
+                else:
+                    value[3].config(text=format(value[2], '4.3f'))
         except ValueError as inst:
             messagebox.showerror('Value Error', inst)
 

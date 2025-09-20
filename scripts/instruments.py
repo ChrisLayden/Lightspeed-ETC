@@ -26,7 +26,7 @@ qcmos_qe = SpectralElement(Empirical1D, points=qcmos_arr[:, 0] * 10 * u.AA,
                          lookup_table=qcmos_arr[:, 1])
 qcmos_nonlinearity = np.genfromtxt(data_folder + 'qCMOS_nonlinearity_scaling.csv', delimiter=',', skip_header=1)
 qcmos = Sensor(pix_size=4.6, read_noise=0.28, dark_current=0.004, full_well=7000,
-               qe=qcmos_qe, nonlinearity_scaleup= qcmos_nonlinearity)
+               qe=qcmos_qe, nonlinearity_scaleup=qcmos_nonlinearity)
 
 basic_sensor = Sensor(pix_size=10, read_noise=10, dark_current=0.01,
                       full_well=100000, qe=SpectralElement(ConstFlux1D, amplitude=0.5))
@@ -40,27 +40,29 @@ sensor_dict_lightspeed = {'Define New Sensor': basic_sensor, 'qCMOS': qcmos}
 # Defining telescopes
 basic_tele = Telescope(diam=10, f_num=1)
 
-magellan_bandpass = SpectralElement(ConstFlux1D, amplitude=0.95)
-magellan_tele_native = Telescope(diam=650, f_num=11, bandpass=magellan_bandpass)
-magellan_tele_lightspeed = Telescope(diam=650, f_num=1.4, bandpass=magellan_bandpass)
-magellan_tele_prototype = Telescope(diam=650, f_num=2.75, bandpass=magellan_bandpass)
+magellan_obscuration = 1 - 0.29 ** 2  # Diameter ratio 0.29
+magellan_nase_thru = 0.9 * 0.9 * 0.9 # Assuming 90% reflectivity for each of 3 mirrors
+Clay_bandpass = SpectralElement(ConstFlux1D, amplitude=magellan_obscuration * magellan_nase_thru)
+Clay_tele_native = Telescope(diam=650, f_num=11, bandpass=Clay_bandpass)
+Clay_tele_lightspeed = Telescope(diam=650, f_num=1.4, bandpass=Clay_bandpass)
+Clay_tele_prototype = Telescope(diam=650, f_num=2.75, bandpass=Clay_bandpass)
 
-hale_bandpass = SpectralElement(ConstFlux1D, amplitude=0.95)
+hale_bandpass = SpectralElement(ConstFlux1D, amplitude=0.9)
 hale_tele = Telescope(diam=510, f_num=3.29, psf_type='airy', bandpass=hale_bandpass)
 winter_bandpass = SpectralElement(ConstFlux1D, amplitude=0.23)
 winter_tele = Telescope(diam=100, f_num=6.0, psf_type='airy', bandpass=winter_bandpass)
 
 # Telescope dictionary for ground-based observatories
 telescope_dict_gb = {'Define New Telescope': basic_tele,
-                     'Magellan': magellan_tele_native,
-                     'Magellan LightSpeed': magellan_tele_lightspeed,
+                     'Clay': Clay_tele_native,
+                     'Clay LightSpeed': Clay_tele_lightspeed,
                      'Hale': hale_tele}
 
 telescope_dict_lightspeed = {'Define New Telescope': basic_tele,
-                             'Magellan Native': magellan_tele_native,
-                             'Magellan Prototype': magellan_tele_prototype,
-                             'Magellan Lightspeed': magellan_tele_lightspeed,
-                             'Hale': hale_tele, 'WINTER': winter_tele}
+                             'Clay Native': Clay_tele_native,
+                             'Clay (proto-Lightspeed)': Clay_tele_prototype,
+                             'Clay (full Lightspeed)': Clay_tele_lightspeed,
+                             'Hale': hale_tele}
 
 # Defining filters
 no_filter = SpectralElement(ConstFlux1D, amplitude=1.0)
