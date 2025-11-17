@@ -28,14 +28,21 @@ qcmos_nonlinearity = np.genfromtxt(data_folder + 'qCMOS_nonlinearity_scaling.csv
 qcmos = Sensor(pix_size=4.6, read_noise=0.28, dark_current=0.004, full_well=7000,
                qe=qcmos_qe, nonlinearity_scaleup=qcmos_nonlinearity)
 
+noiseless_ideal_sensor = Sensor(pix_size=4.6, read_noise=0.0, dark_current=0.004, full_well=7000,
+                                qe=qcmos_qe, nonlinearity_scaleup=None)
+
 basic_sensor = Sensor(pix_size=10, read_noise=10, dark_current=0.01,
                       full_well=100000, qe=SpectralElement(ConstFlux1D, amplitude=0.5))
+
+hipercam_sensor = Sensor(pix_size=15, read_noise=4.5, dark_current=0.03, full_well=120000,
+                         qe=SpectralElement(ConstFlux1D, amplitude=1.0))
 
 # Sensor dictionary for ground-based observatories
 sensor_dict_gb = {'Define New Sensor': basic_sensor, 'Sony IMX 455': imx455,
                   'COSMOS': cosmos, 'qCMOS': qcmos}
 
-sensor_dict_lightspeed = {'Define New Sensor': basic_sensor, 'qCMOS': qcmos}
+sensor_dict_lightspeed = {'Define New Sensor': basic_sensor, 'qCMOS': qcmos, 'HiPERCAM': hipercam_sensor,
+                          'Noiseless Ideal Sensor': noiseless_ideal_sensor}
 
 # Defining telescopes
 basic_tele = Telescope(diam=10, f_num=1)
@@ -46,11 +53,17 @@ Clay_bandpass = SpectralElement(ConstFlux1D, amplitude=magellan_obscuration * ma
 Clay_tele_native = Telescope(diam=650, f_num=11, bandpass=Clay_bandpass)
 Clay_tele_lightspeed = Telescope(diam=650, f_num=1.4, bandpass=Clay_bandpass)
 Clay_tele_prototype = Telescope(diam=650, f_num=2.75, bandpass=Clay_bandpass)
+gtc_bandpass = SpectralElement(ConstFlux1D, amplitude=magellan_obscuration * magellan_nase_thru)
+gtc_hipercam_tele = Telescope(diam=1040, f_num=2.64, bandpass=gtc_bandpass)
+
+gmt_tele = Telescope(diam=2540, f_num=1.2, bandpass=magellan_obscuration * magellan_nase_thru)
 
 hale_bandpass = SpectralElement(ConstFlux1D, amplitude=0.9)
 hale_tele = Telescope(diam=510, f_num=3.29, psf_type='airy', bandpass=hale_bandpass)
 winter_bandpass = SpectralElement(ConstFlux1D, amplitude=0.23)
 winter_tele = Telescope(diam=100, f_num=6.0, psf_type='airy', bandpass=winter_bandpass)
+
+keck_tele_zshooter = Telescope(diam=1000, f_num=1.4, bandpass=magellan_obscuration * magellan_nase_thru)
 
 # Telescope dictionary for ground-based observatories
 telescope_dict_gb = {'Define New Telescope': basic_tele,
@@ -62,7 +75,9 @@ telescope_dict_lightspeed = {'Define New Telescope': basic_tele,
                              'Clay Native': Clay_tele_native,
                              'Clay (proto-Lightspeed)': Clay_tele_prototype,
                              'Clay (full Lightspeed)': Clay_tele_lightspeed,
-                             'Hale': hale_tele}
+                             'Hale': hale_tele,
+                             'GTC (HiPERCAM)': gtc_hipercam_tele,
+                             'GMT': gmt_tele, 'Keck (Z-shooter)': keck_tele_zshooter}
 
 # Defining filters
 no_filter = SpectralElement(ConstFlux1D, amplitude=1.0)
@@ -111,6 +126,12 @@ sloan_zprime = SpectralElement(Empirical1D,
                              points=sloan_zprime_data[:, 0] * u.AA,
                              lookup_table=sloan_zprime_data[:, 1])
 
+hipercam_gprime_data = np.genfromtxt(data_folder + 'hipercam_g.csv',
+                                     delimiter=',')
+hipercam_gprime = SpectralElement(Empirical1D,
+                                  points=hipercam_gprime_data[:, 0] * u.nm,
+                                  lookup_table=hipercam_gprime_data[:, 1])
+
 # Halpha filter
 ha_filter_data = np.genfromtxt(data_folder + 'halpha_filter.csv', delimiter=',', skip_header=1)
 ha_filter = SpectralElement(Empirical1D,
@@ -127,6 +148,17 @@ vis_filter = SpectralElement(Empirical1D,
                            points=vis_filt_arr[:, 0] * u.AA,
                            lookup_table=vis_filt_arr[:, 1])
 
+xpoints_oiii = np.arange(485, 515, 0.5)
+ypoints_oiii = 0.97 * np.exp(-0.5 * ((xpoints_oiii - 500.7) / 3.822)**2)
+baader_filter = SpectralElement(Empirical1D, 
+                             points=xpoints_oiii * 10 * u.AA,
+                             lookup_table=ypoints_oiii)
+
+whitelight_throughput_proto = np.genfromtxt(data_folder + 'whitelight_throughput_proto.csv', delimiter=',')
+whitelight_throughput_proto_filter = SpectralElement(Empirical1D,
+                                                  points=whitelight_throughput_proto[:, 0] * u.AA,
+                                                  lookup_table=whitelight_throughput_proto[:, 1])
+
 # filter_dict_gb = {'None': no_filter, 'Johnson U': johnson_u,
 #                   'Johnson B': johnson_b, 'Johnson V': johnson_v,
 #                   'Johnson R': johnson_r, 'Johnson I': johnson_i,
@@ -138,7 +170,9 @@ vis_filter = SpectralElement(Empirical1D,
 
 filter_dict_lightspeed = {"None": no_filter, "Sloan u'": sloan_uprime,
                           "Sloan g'": sloan_gprime, "Sloan r'": sloan_rprime,
-                          "Sloan i'": sloan_iprime, "Sloan z'": sloan_zprime}
+                          "Sloan i'": sloan_iprime, "Sloan z'": sloan_zprime,
+                          "Baader OIII": baader_filter, "Halpha": ha_filter,
+                          "HiPERCAM g'": hipercam_gprime, "Prototype White Light": whitelight_throughput_proto_filter}
 
 # Bandpass representing transmission through the atmosphere at airmass 1
 atmo_bandpass_data = np.genfromtxt(data_folder + 'atmo_transmission_airmass1.csv',
@@ -176,33 +210,58 @@ if __name__ == '__main__':
     # plt.ylim(0,100)
     # plt.show()
     plt.figure(figsize=(10, 6))
-    tot_thru_u = sloan_uprime * qcmos_qe * atmo_bandpass * 0.05
-    tot_thru_g = sloan_gprime * qcmos_qe * atmo_bandpass * 0.57
-    tot_thru_r = sloan_rprime * qcmos_qe * atmo_bandpass * 0.65
-    tot_thru_i = sloan_iprime * qcmos_qe * atmo_bandpass * 0.28
-    tot_thru_z = sloan_zprime * qcmos_qe * atmo_bandpass * 0.06
+    # tot_thru_u = sloan_uprime * qcmos_qe * atmo_bandpass * 0.05
+    # tot_thru_g = sloan_gprime * qcmos_qe * atmo_bandpass * 0.57
+    # tot_thru_r = sloan_rprime * qcmos_qe * atmo_bandpass * 0.65
+    # tot_thru_i = sloan_iprime * qcmos_qe * atmo_bandpass * 0.28
+    # tot_thru_z = sloan_zprime * qcmos_qe * atmo_bandpass * 0.06
+    tot_thru_u = sloan_uprime * qcmos_qe * 0.05
+    tot_thru_g = sloan_gprime * qcmos_qe * 0.57
+    tot_thru_r = sloan_rprime * qcmos_qe * 0.65
+    tot_thru_i = sloan_iprime * qcmos_qe * 0.28
+    tot_thru_z = sloan_zprime * qcmos_qe * 0.06
+    tot_thru_u2 = sloan_uprime * qcmos_qe * 0.8
+    tot_thru_g2 = sloan_gprime * qcmos_qe * 0.8
+    tot_thru_r2 = sloan_rprime * qcmos_qe * 0.8
+    tot_thru_i2 = sloan_iprime * qcmos_qe * 0.8
+    tot_thru_z2 = sloan_zprime * qcmos_qe * 0.8
     oiii_filter = SpectralElement(Empirical1D, 
                                 points=xpoints_oiii * 10 * u.AA,
                                 lookup_table=ypoints_oiii)
     tot_thru_oiii = oiii_filter * qcmos_qe * atmo_bandpass * 0.57
     tot_thru_halpha = ha_filter * qcmos_qe * atmo_bandpass * 0.65
-    
-    plt.plot(tot_thru_u.waveset.to(u.nm).value, tot_thru_u(tot_thru_u.waveset) * 100, 'b--', label='SDSS u\'', alpha=0.5)
-    plt.plot(tot_thru_g.waveset.to(u.nm).value, tot_thru_g(tot_thru_g.waveset) * 100, 'g--', label='SDSS g\'', alpha=0.5)
-    plt.plot(tot_thru_r.waveset.to(u.nm).value, tot_thru_r(tot_thru_r.waveset) * 100, 'r--', label='SDSS r\'', alpha=0.5)
-    plt.plot(tot_thru_i.waveset.to(u.nm).value, tot_thru_i(tot_thru_i.waveset) * 100, 'm--', label='SDSS i\'', alpha=0.5)
-    plt.plot(tot_thru_z.waveset.to(u.nm).value, tot_thru_z(tot_thru_z.waveset) * 100, 'c--', label='SDSS z\'', alpha=0.5)
-    plt.plot(tot_thru_oiii.waveset.to(u.nm).value, tot_thru_oiii(tot_thru_oiii.waveset) * 100, '-.', color='darkorange', label='Baader OIII', alpha=0.5)
-    plt.plot(tot_thru_halpha.waveset.to(u.nm).value, tot_thru_halpha(tot_thru_halpha.waveset) * 100, '-.', color='darkred', label='Halpha', alpha=0.5)
-    plt.text(tot_thru_u.pivot().to(u.nm).value, np.max(tot_thru_u(tot_thru_u.waveset)) * 100 + 0.5, "u'", color='b', ha='center')
-    plt.text(tot_thru_g.pivot().to(u.nm).value, np.max(tot_thru_g(tot_thru_g.waveset)) * 100 + 0.5, "g'", color='g', ha='center')
-    plt.text(tot_thru_r.pivot().to(u.nm).value, np.max(tot_thru_r(tot_thru_r.waveset)) * 100 + 0.5, "r'", color='r', ha='center')
-    plt.text(tot_thru_i.pivot().to(u.nm).value, np.max(tot_thru_i(tot_thru_i.waveset)) * 100 + 0.5, "i'", color='m', ha='center')
-    plt.text(tot_thru_z.pivot().to(u.nm).value, np.max(tot_thru_z(tot_thru_z.waveset)) * 100 + 0.5, "z'", color='c', ha='center')
-    plt.text(500.7, np.max(tot_thru_oiii(tot_thru_oiii.waveset)) * 100 + 0.5, "OIII", color='darkorange', ha='center')
-    plt.text(656.3, np.max(tot_thru_halpha(tot_thru_halpha.waveset)) * 100 + 0.5, r"$H_\alpha$", color='darkred', ha='center')
+
+    plt.plot(tot_thru_u.waveset.to(u.nm).value, tot_thru_u(tot_thru_u.waveset) * 100, 'b-', alpha=0.5)
+    plt.plot(tot_thru_g.waveset.to(u.nm).value, tot_thru_g(tot_thru_g.waveset) * 100, 'g-', alpha=0.5)
+    plt.plot(tot_thru_r.waveset.to(u.nm).value, tot_thru_r(tot_thru_r.waveset) * 100, 'r-', alpha=0.5)
+    plt.plot(tot_thru_i.waveset.to(u.nm).value, tot_thru_i(tot_thru_i.waveset) * 100, 'm-', alpha=0.5)
+    plt.plot(tot_thru_z.waveset.to(u.nm).value, tot_thru_z(tot_thru_z.waveset) * 100, 'c-', alpha=0.5)
+    plt.plot(tot_thru_u2.waveset.to(u.nm).value, tot_thru_u2(tot_thru_u2.waveset) * 100, 'b:', alpha=0.5)
+    plt.plot(tot_thru_g2.waveset.to(u.nm).value, tot_thru_g2(tot_thru_g2.waveset) * 100, 'g:', alpha=0.5)
+    plt.plot(tot_thru_r2.waveset.to(u.nm).value, tot_thru_r2(tot_thru_r2.waveset) * 100, 'r:', alpha=0.5)
+    plt.plot(tot_thru_i2.waveset.to(u.nm).value, tot_thru_i2(tot_thru_i2.waveset) * 100, 'm:', alpha=0.5)
+    plt.plot(tot_thru_z2.waveset.to(u.nm).value, tot_thru_z2(tot_thru_z2.waveset) * 100, 'c:', alpha=0.5)
+    # plt.plot(tot_thru_oiii.waveset.to(u.nm).value, tot_thru_oiii(tot_thru_oiii.waveset) * 100, '-.', color='darkorange', label='Baader OIII', alpha=0.5)
+    # plt.plot(tot_thru_halpha.waveset.to(u.nm).value, tot_thru_halpha(tot_thru_halpha.waveset) * 100, '-.', color='darkred', label='Halpha', alpha=0.5)
+    # plt.text(tot_thru_u.pivot().to(u.nm).value, np.max(tot_thru_u(tot_thru_u.waveset)) * 100 + 0.5, "u'", color='b', ha='center')
+    # plt.text(tot_thru_g.pivot().to(u.nm).value, np.max(tot_thru_g(tot_thru_g.waveset)) * 100 + 0.5, "g'", color='g', ha='center')
+    # plt.text(tot_thru_r.pivot().to(u.nm).value, np.max(tot_thru_r(tot_thru_r.waveset)) * 100 + 0.5, "r'", color='r', ha='center')
+    # plt.text(tot_thru_i.pivot().to(u.nm).value, np.max(tot_thru_i(tot_thru_i.waveset)) * 100 + 0.5, "i'", color='m', ha='center')
+    # plt.text(tot_thru_z.pivot().to(u.nm).value, np.max(tot_thru_z(tot_thru_z.waveset)) * 100 + 0.5, "z'", color='c', ha='center')
+    plt.text(tot_thru_u2.pivot().to(u.nm).value, np.max(tot_thru_u2(tot_thru_u2.waveset)) * 100 + 0.5, "u'", color='b', ha='center')
+    plt.text(tot_thru_g2.pivot().to(u.nm).value, np.max(tot_thru_g2(tot_thru_g2.waveset)) * 100 + 0.5, "g'", color='g', ha='center')
+    plt.text(tot_thru_r2.pivot().to(u.nm).value, np.max(tot_thru_r2(tot_thru_r2.waveset)) * 100 + 0.5, "r'", color='r', ha='center')
+    plt.text(tot_thru_i2.pivot().to(u.nm).value, np.max(tot_thru_i2(tot_thru_i2.waveset)) * 100 + 0.5, "i'", color='m', ha='center')
+    plt.text(tot_thru_z2.pivot().to(u.nm).value, np.max(tot_thru_z2(tot_thru_z2.waveset)) * 100 + 0.5, "z'", color='c', ha='center')
+    # plt.text(500.7, np.max(tot_thru_oiii(tot_thru_oiii.waveset)) * 100 + 0.5, "OIII", color='darkorange', ha='center')
+    # plt.text(656.3, np.max(tot_thru_halpha(tot_thru_halpha.waveset)) * 100 + 0.5, r"$H_\alpha$", color='darkred', ha='center')
     plt.xlim(300, 1050)
-    plt.ylim(0.1, 40)
+    plt.ylim(0.1, 70)
     plt.xlabel('Wavelength (nm)')
     plt.ylabel('Transmission (%)')
+    # Make legend showing solid lines are current throughput and dotted lines are potential improved throughput.
+    # Use black solid line and black dotted line for legend.
+    plt.plot([], [], 'k:', label='Lightspeed design goal')
+    plt.plot([], [], 'k-', label='proto-Lightspeed')
+    plt.legend()
     plt.show()

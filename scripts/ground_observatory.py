@@ -229,7 +229,7 @@ class GroundObservatory(Observatory):
         n_aper = np.sum(optimal_aper)
         if self.sensor.nonlinearity_scaleup is not None:
             # Adjust shot and read noise for sensor nonlinearity
-            tot_frame = signal_grid * optimal_aper * (1 + self.sensor.dark_current * self.exposure_time +
+            tot_frame = optimal_aper * (signal_grid + self.sensor.dark_current * self.exposure_time +
                                 self.bkg_per_pix())
             pix_scaleup_factors = np.interp(tot_frame, self.sensor.nonlinearity_scaleup[:, 0],
                                             self.sensor.nonlinearity_scaleup[:, 1],
@@ -237,7 +237,7 @@ class GroundObservatory(Observatory):
                                             right=self.sensor.nonlinearity_scaleup[-1, 1])
             pix_scaleup_factors = optimal_aper * pix_scaleup_factors
             pix_read_var_vals = (pix_scaleup_factors * self.sensor.read_noise) ** 2
-            pix_shot_var_vals = tot_frame * pix_scaleup_factors
+            pix_shot_var_vals = signal_grid * pix_scaleup_factors
             pix_dark_noise_vals = self.sensor.dark_current * self.exposure_time * pix_scaleup_factors
             bkg_noise_vals = self.bkg_per_pix() * pix_scaleup_factors
             read_noise = np.sqrt(np.sum(pix_read_var_vals) * self.num_exposures)
@@ -262,10 +262,10 @@ class GroundObservatory(Observatory):
 
 
 if __name__ == '__main__':
-    from instruments import qcmos, magellan_tele_prototype, sloan_gprime
-    prototype = GroundObservatory(sensor=qcmos, telescope=magellan_tele_prototype,
+    from instruments import qcmos, Clay_tele_prototype, sloan_gprime
+    prototype = GroundObservatory(sensor=qcmos, telescope=Clay_tele_prototype,
                                  filter_bandpass=sloan_gprime,
-                                 altitude=2, exposure_time=0.1,
+                                 altitude=2, exposure_time=100,
                                  seeing=0.5, alpha=180, zo=0, rho=45)
     my_spectrum = SourceSpectrum(ConstFlux1D, amplitude=20 * u.ABmag)
     print(prototype.observe(my_spectrum))

@@ -227,6 +227,10 @@ class MyGUI:
                                     command=self.plot_mag_vs_noise, fg='green')
         self.plot_button.grid(row=11, column=4, columnspan=2, padx=PADX,
                               pady=PADY)
+        self.plot_snr_button = tk.Button(self.root, text='Plot Magnitude vs. SNR',
+                                    command=self.plot_mag_vs_snr, fg='green')
+        self.plot_snr_button.grid(row=12, column=4, columnspan=2, padx=PADX,
+                              pady=PADY)
         # Set default values
         self.sens = sensor_dict_lightspeed['qCMOS']
         self.tele = telescope_dict_lightspeed['Clay (proto-Lightspeed)']
@@ -252,24 +256,29 @@ class MyGUI:
 
     def update_altitude(self, *_):
         '''Update altitude of the telescope based on the selected telescope'''
-        altitude_dict = {'Clay': 2516, 'Palomar': 1712}
+        altitude_dict = {'Clay': 2516, 'Palomar': 1712, 'Keck': 4145}
         tele_name = self.tele_vars['name'][2].get()
         if 'Clay' in tele_name:
             self.tele_vars['altitude'][2].set(altitude_dict['Clay'])
         # Check if name is WINTER or Hale. If either, use palomar alt
         elif 'WINTER' in tele_name or 'Hale' in tele_name:
             self.tele_vars['altitude'][2].set(altitude_dict['Palomar'])
+        elif 'Keck' in tele_name:
+            self.tele_vars['altitude'][2].set(altitude_dict['Keck'])
 
     def update_reimaging_throughput(self, *_):
         '''Update reimaging throughput based on the selected telescope and filter'''
         tele_name = self.tele_vars['name'][2].get()
         filter_name = self.obs_vars_dict['filter'][2].get()
+        # For white light, make a piecewise throughput
         throughput_dict_prototype = {'Sloan g\'': 0.57, 'Sloan r\'': 0.65,
                                      'Sloan i\'': 0.28, 'Sloan z\'': 0.06,
-                                     'Sloan u\'': 0.05}
-        throughput_dict_lightspeed = {'Sloan g\'': 0.85, 'Sloan r\'': 0.85,
-                                     'Sloan i\'': 0.85, 'Sloan z\'': 0.85,
-                                     'Sloan u\'': 0.85}
+                                     'Sloan u\'': 0.05, 'Halpha': 0.65,
+                                     'Baader OIII': 0.57}
+        throughput_dict_lightspeed = {'Sloan g\'': 0.8, 'Sloan r\'': 0.8,
+                                     'Sloan i\'': 0.8, 'Sloan z\'': 0.8,
+                                     'Sloan u\'': 0.8, 'Halpha': 0.8, 'None': 0.8,
+                                     'Baader OIII': 0.8}
         if tele_name == 'Clay (proto-Lightspeed)':
             throughput_dict = throughput_dict_prototype
         elif tele_name == 'Clay (full Lightspeed)':
@@ -448,7 +457,7 @@ class MyGUI:
         total_bp = obs.bandpass
         bps_to_plot = [sens_bp, filter_bp, reimaging_bp, tele_bp, atmo_bp, total_bp]
         bp_names = ['Sensor QE', 'Filter', 'Reimaging Optics', 'Telescope', 'Atmosphere', 'Total']
-        linestyles = ['--', '--', ':', ':', '-.', '-']
+        linestyles = ['--', ':', '--', ':', '-.', '-']
         for bp, name, ls in zip(bps_to_plot, bp_names, linestyles):
             if hasattr(bp, 'model') and hasattr(bp.model, 'amplitude') and bp.waveset is None:
                 # Uniform transmission
@@ -509,6 +518,62 @@ class MyGUI:
         exposure_time = self.obs_vars_dict['exptime'][2].get()
         title = f'{tele_name}, {bandpass}, t_exp={exposure_time}s'
         plt.title(title)
+        plt.show()
+
+    def plot_mag_vs_snr(self):
+        '''Plot the photometric precision vs. AB magnitude.'''
+        # Increase font size
+        plt.rcParams.update({'font.size': 14})
+        # Make figure wider
+        plt.figure(figsize=(10, 6))
+        # Leave space for legend on the right side
+        plt.subplots_adjust(right=0.75)
+        exp_time_vals = [0.0002, 0.001, 0.004]
+        
+        for j, exp_time in enumerate(exp_time_vals):
+            self.obs_vars_dict['exptime'][2].set(exp_time)
+            num_exp = 3 * 3600 / exp_time
+            self.obs_vars_dict['num_exposures'][2].set(num_exp)
+            observatory = self.set_obs()
+            mag_points = np.linspace(15, 31, 17)
+            snr_points = np.zeros_like(mag_points)
+            for i, mag in enumerate(mag_points):
+                spectrum = SourceSpectrum(ConstFlux1D, amplitude=mag * u.ABmag)
+                results = observatory.observe(spectrum)
+                snr = results['signal'] / results['tot_noise']
+                snr_points[i] = snr
+            if j == 0:
+                plt.plot(mag_points, snr_points, 'k-', label=r'5000 Hz')
+            elif j == 1:
+                plt.plot(mag_points, snr_points, 'k--', label=r'1000 Hz')
+            else:
+                plt.plot(mag_points, snr_points, 'k-.', label=r'250 Hz')
+        # snr_threshold = self.obs_vars_dict['limiting_snr'][2].get()
+        # plt.fill_between(np.linspace(10, 30, 10), 0, snr_threshold, color='red', alpha=0.1,
+        #                  label='Non-detection')
+        # Have colors advance from blue to red as magnitude increases
+        plt.axvline(x=16.5, color='magenta', ls='-.', label='SAXJ1808-3658')
+        plt.axvline(x=16.6, color='purple', ls=':', label='Crab')
+        plt.axvline(x=17.5, color='blue', ls='-.', label='J1023+0038')
+        # plt.axvline(x=21, color='cyan', ls='-.', label='J0437−4715')
+        plt.axvline(x=22.1, color='lime', ls=':', label='B1509-58')
+        plt.axvline(x=22.5, color='darkgreen', ls=':', label='B0540-69')
+        plt.axvline(x=23.6, color='orange', ls=':', label='Vela')
+        plt.axvline(x=25.0, color='red', ls=':', label='B0656+14')
+        plt.axvline(x=25.5, color='brown', ls=':', label='Geminga')
+        plt.axvline(x=26.0, color='cyan', ls='-.', label='J2339-0533')
+        plt.axhline(y=10, color='gray', ls='-', alpha=0.5)
+        plt.axhline(y=100, color='gray', ls='-', alpha=0.5)
+        plt.axhline(y=1000, color='gray', ls='-', alpha=0.5)
+        plt.axhline(y=10000, color='gray', ls='-', alpha=0.5)
+        plt.xlim(15, 30)
+        # Set lower ylim
+        plt.ylim(1, 1e5)
+        plt.xlabel('AB Magnitude')
+        plt.ylabel('White light SNR in 3 hours')
+        plt.yscale('log')
+        # Put legend to right side of plot OUTSIDE OF PLOT
+        plt.legend(loc='center left', bbox_to_anchor=(1, 0.5), fontsize=11)
         plt.show()
 
 
