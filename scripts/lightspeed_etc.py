@@ -281,7 +281,7 @@ class MyGUI:
                                      'Baader OIII': 0.8}
         if tele_name == 'Clay (proto-Lightspeed)':
             throughput_dict = throughput_dict_prototype
-        elif tele_name == 'Clay (full Lightspeed)':
+        elif tele_name == 'Clay (full Lightspeed)' or 'Keck' in tele_name:
             throughput_dict = throughput_dict_lightspeed
         else:
             self.obs_vars_dict['reim_throughput'][2].set(1.0)

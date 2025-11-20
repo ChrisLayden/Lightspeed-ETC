@@ -63,7 +63,7 @@ hale_tele = Telescope(diam=510, f_num=3.29, psf_type='airy', bandpass=hale_bandp
 winter_bandpass = SpectralElement(ConstFlux1D, amplitude=0.23)
 winter_tele = Telescope(diam=100, f_num=6.0, psf_type='airy', bandpass=winter_bandpass)
 
-keck_tele_zshooter = Telescope(diam=1000, f_num=1.4, bandpass=magellan_obscuration * magellan_nase_thru)
+keck_tele_zimager = Telescope(diam=1000, f_num=1.4, bandpass=magellan_obscuration * magellan_nase_thru)
 
 # Telescope dictionary for ground-based observatories
 telescope_dict_gb = {'Define New Telescope': basic_tele,
@@ -77,7 +77,7 @@ telescope_dict_lightspeed = {'Define New Telescope': basic_tele,
                              'Clay (full Lightspeed)': Clay_tele_lightspeed,
                              'Hale': hale_tele,
                              'GTC (HiPERCAM)': gtc_hipercam_tele,
-                             'GMT': gmt_tele, 'Keck (Z-shooter)': keck_tele_zshooter}
+                             'GMT': gmt_tele, 'Keck (Z-imager)': keck_tele_zimager}
 
 # Defining filters
 no_filter = SpectralElement(ConstFlux1D, amplitude=1.0)
