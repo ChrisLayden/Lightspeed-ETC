@@ -32,9 +32,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:8080",
         "http://127.0.0.1:8080",
-        "http://localhost:8000",
-        "https://yourusername.github.io",  # Replace with your GitHub Pages URL
-        "*"  # Remove in production
+        "http://localhost:8001",
+        "https://lightspeed-astro.github.io",  # Replace with your GitHub Pages URL
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -479,4 +478,4 @@ async def plot_mag_vs_precision(request: MagPrecisionPlotRequest):
 # ==================== Main ====================
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)
