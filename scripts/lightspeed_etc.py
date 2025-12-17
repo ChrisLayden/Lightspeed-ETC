@@ -279,10 +279,16 @@ class MyGUI:
                                      'Sloan i\'': 0.8, 'Sloan z\'': 0.8,
                                      'Sloan u\'': 0.8, 'Halpha': 0.8, 'None': 0.8,
                                      'Baader OIII': 0.8}
+        throughput_dict_prime = {'Sloan g\'': 1, 'Sloan r\'': 1,
+                                 'Sloan i\'': 1, 'Sloan z\'': 1,
+                                 'Sloan u\'': 1, 'Halpha': 1, 'None': 1,
+                                  'Baader OIII': 1}
         if tele_name == 'Clay (proto-Lightspeed)':
             throughput_dict = throughput_dict_prototype
         elif tele_name == 'Clay (full Lightspeed)' or 'Keck' in tele_name:
             throughput_dict = throughput_dict_lightspeed
+        elif tele_name == 'Clay Prime Focus':
+            throughput_dict = throughput_dict_prime
         else:
             self.obs_vars_dict['reim_throughput'][2].set(1.0)
             return

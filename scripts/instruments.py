@@ -48,11 +48,15 @@ sensor_dict_lightspeed = {'Define New Sensor': basic_sensor, 'qCMOS': qcmos, 'Hi
 basic_tele = Telescope(diam=10, f_num=1)
 
 magellan_obscuration = 1 - 0.29 ** 2  # Diameter ratio 0.29
+swope_obscuration = 1 - 0.5 ** 2  # Diameter ratio 0.5
 magellan_nase_thru = 0.9 * 0.9 * 0.9 # Assuming 90% reflectivity for each of 3 mirrors
 Clay_bandpass = SpectralElement(ConstFlux1D, amplitude=magellan_obscuration * magellan_nase_thru)
+Clay_prime_bandpass = SpectralElement(ConstFlux1D, amplitude=magellan_obscuration * 0.9)
 Clay_tele_native = Telescope(diam=650, f_num=11, bandpass=Clay_bandpass)
 Clay_tele_lightspeed = Telescope(diam=650, f_num=1.4, bandpass=Clay_bandpass)
 Clay_tele_prototype = Telescope(diam=650, f_num=2.75, bandpass=Clay_bandpass)
+Clay_tele_prime = Telescope(diam=650, f_num=1.25, bandpass=Clay_prime_bandpass)
+
 gtc_bandpass = SpectralElement(ConstFlux1D, amplitude=magellan_obscuration * magellan_nase_thru)
 gtc_hipercam_tele = Telescope(diam=1040, f_num=2.64, bandpass=gtc_bandpass)
 
@@ -65,19 +69,24 @@ winter_tele = Telescope(diam=100, f_num=6.0, psf_type='airy', bandpass=winter_ba
 
 keck_tele_zimager = Telescope(diam=1000, f_num=1.4, bandpass=magellan_obscuration * magellan_nase_thru)
 
+swope = Telescope(diam=100, f_num=7.0, bandpass=magellan_nase_thru * swope_obscuration)
+
 # Telescope dictionary for ground-based observatories
 telescope_dict_gb = {'Define New Telescope': basic_tele,
                      'Clay': Clay_tele_native,
                      'Clay LightSpeed': Clay_tele_lightspeed,
+                     'Clay Prime Focus': Clay_tele_prime,
                      'Hale': hale_tele}
 
 telescope_dict_lightspeed = {'Define New Telescope': basic_tele,
                              'Clay Native': Clay_tele_native,
                              'Clay (proto-Lightspeed)': Clay_tele_prototype,
                              'Clay (full Lightspeed)': Clay_tele_lightspeed,
+                             'Clay Prime Focus': Clay_tele_prime,
                              'Hale': hale_tele,
                              'GTC (HiPERCAM)': gtc_hipercam_tele,
-                             'GMT': gmt_tele, 'Keck (Z-imager)': keck_tele_zimager}
+                             'GMT': gmt_tele, 'Keck (Z-imager)': keck_tele_zimager,
+                             'Swope': swope}
 
 # Defining filters
 no_filter = SpectralElement(ConstFlux1D, amplitude=1.0)
