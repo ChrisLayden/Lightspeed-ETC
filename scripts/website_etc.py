@@ -32,8 +32,9 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:8080",
         "http://127.0.0.1:8080",
-        "http://localhost:8001",
-        "https://lightspeed-astro.github.io",  # Replace with your GitHub Pages URL
+        "http://localhost:8000",
+        "https://yourusername.github.io",  # Replace with your GitHub Pages URL
+        "*"  # Remove in production
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -201,6 +202,21 @@ def create_spectrum(spectrum_type: str, params: Dict[str, Any]) -> SourceSpectru
 async def root():
     return {"message": "Lightspeed ETC API is running"}
 
+@app.get("/get_available_sensors")
+async def get_available_sensors():
+    """Get list of available sensors"""
+    return {"sensors": list(sensor_dict_lightspeed.keys())}
+
+@app.get("/get_available_telescopes")
+async def get_available_telescopes():
+    """Get list of available telescopes"""
+    return {"telescopes": list(telescope_dict_lightspeed.keys())}
+
+@app.get("/get_available_filters")
+async def get_available_filters():
+    """Get list of available filters"""
+    return {"filters": list(filter_dict_lightspeed.keys())}
+
 @app.get("/get_sensor_info/{sensor_name}")
 async def get_sensor_info(sensor_name: str):
     """Get sensor properties by name"""
@@ -224,6 +240,7 @@ async def get_telescope_info(telescope_name: str):
         # Get altitude based on telescope name
         altitude_dict = {
             'Clay': 2516,      # Las Campanas Observatory, Chile
+            'Swope': 2516,     # Las Campanas Observatory, Chile  
             'Palomar': 1712,   # Palomar Observatory, California
             'Keck': 4145,      # Mauna Kea, Hawaii
             'GTC': 2396,       # Roque de los Muchachos, La Palma
@@ -239,6 +256,8 @@ async def get_telescope_info(telescope_name: str):
             altitude = altitude_dict['Keck']
         elif 'GTC' in telescope_name:
             altitude = altitude_dict['GTC']
+        elif 'Swope' in telescope_name:
+            altitude = altitude_dict['Swope']
         
         # Get bandpass value
         if hasattr(telescope.bandpass, 'model') and hasattr(telescope.bandpass.model, 'amplitude'):
@@ -262,23 +281,32 @@ async def get_reimaging_throughput(data: Dict[str, str]):
     filter_name = data.get('filter', '')
     
     throughput_dict_prototype = {
-        "Sloan g'": 0.57, "Sloan r'": 0.65,
-        "Sloan i'": 0.28, "Sloan z'": 0.06,
-        "Sloan u'": 0.05, "Halpha": 0.65,
+        "Baader g'": 0.57, "Baader r'": 0.65,
+        "Baader i'": 0.28, "Baader z'": 0.06,
+        "Baader u'": 0.05, "Halpha": 0.65,
         "Baader OIII": 0.57
     }
     
     throughput_dict_lightspeed = {
-        "Sloan g'": 0.8, "Sloan r'": 0.8,
-        "Sloan i'": 0.8, "Sloan z'": 0.8,
-        "Sloan u'": 0.8, "Halpha": 0.8, 
+        "Baader g'": 0.8, "Baader r'": 0.8,
+        "Baader i'": 0.8, "Baader z'": 0.8,
+        "Baader u'": 0.8, "Halpha": 0.8, 
         "None": 0.8, "Baader OIII": 0.8
+    }
+    
+    throughput_dict_prime = {
+        "Baader g'": 1.0, "Baader r'": 1.0,
+        "Baader i'": 1.0, "Baader z'": 1.0,
+        "Baader u'": 1.0, "Halpha": 1.0, 
+        "None": 1.0, "Baader OIII": 1.0
     }
     
     if telescope_name == 'Clay (proto-Lightspeed)':
         throughput_dict = throughput_dict_prototype
     elif telescope_name == 'Clay (full Lightspeed)' or 'Keck' in telescope_name:
         throughput_dict = throughput_dict_lightspeed
+    elif telescope_name == 'Clay Prime Focus':
+        throughput_dict = throughput_dict_prime
     else:
         return {"throughput": 1.0}
     
@@ -478,4 +506,4 @@ async def plot_mag_vs_precision(request: MagPrecisionPlotRequest):
 # ==================== Main ====================
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

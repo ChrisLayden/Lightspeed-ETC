@@ -54,7 +54,7 @@ Clay_bandpass = SpectralElement(ConstFlux1D, amplitude=magellan_obscuration * ma
 Clay_prime_bandpass = SpectralElement(ConstFlux1D, amplitude=magellan_obscuration * 0.9)
 Clay_tele_native = Telescope(diam=650, f_num=11, bandpass=Clay_bandpass)
 Clay_tele_lightspeed = Telescope(diam=650, f_num=1.4, bandpass=Clay_bandpass)
-Clay_tele_prototype = Telescope(diam=650, f_num=2.75, bandpass=Clay_bandpass)
+Clay_tele_prototype = Telescope(diam=650, f_num=2.9, bandpass=Clay_bandpass)
 Clay_tele_prime = Telescope(diam=650, f_num=1.25, bandpass=Clay_prime_bandpass)
 
 gtc_bandpass = SpectralElement(ConstFlux1D, amplitude=magellan_obscuration * magellan_nase_thru)
