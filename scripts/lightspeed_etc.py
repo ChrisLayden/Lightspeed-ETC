@@ -236,7 +236,7 @@ class MyGUI:
         self.tele = telescope_dict_lightspeed['Clay (proto-Lightspeed)']
         self.sens_vars['name'][2].set('qCMOS')
         self.tele_vars['name'][2].set('Clay (proto-Lightspeed)')
-        self.obs_vars_dict['filter'][2].set('Sloan g\'')
+        self.obs_vars_dict['filter'][2].set('Baader g\'')
         self.obs_vars_dict['exptime'][2].set(1.0)
         self.obs_vars_dict['num_exposures'][2].set(1)
         self.obs_vars_dict['limiting_snr'][2].set(5.0)
@@ -271,17 +271,17 @@ class MyGUI:
         tele_name = self.tele_vars['name'][2].get()
         filter_name = self.obs_vars_dict['filter'][2].get()
         # For white light, make a piecewise throughput
-        throughput_dict_prototype = {'Sloan g\'': 0.57, 'Sloan r\'': 0.65,
-                                     'Sloan i\'': 0.28, 'Sloan z\'': 0.06,
-                                     'Sloan u\'': 0.05, 'Halpha': 0.65,
+        throughput_dict_prototype = {'Baader g\'': 0.57, 'Baader r\'': 0.65,
+                                     'Baader i\'': 0.28, 'Baader z\'': 0.06,
+                                     'Baader u\'': 0.05, 'Halpha': 0.65,
                                      'Baader OIII': 0.57}
-        throughput_dict_lightspeed = {'Sloan g\'': 0.8, 'Sloan r\'': 0.8,
-                                     'Sloan i\'': 0.8, 'Sloan z\'': 0.8,
-                                     'Sloan u\'': 0.8, 'Halpha': 0.8, 'None': 0.8,
+        throughput_dict_lightspeed = {'Baader g\'': 0.8, 'Baader r\'': 0.8,
+                                     'Baader i\'': 0.8, 'Baader z\'': 0.8,
+                                     'Baader u\'': 0.8, 'Halpha': 0.8, 'None': 0.8,
                                      'Baader OIII': 0.8}
-        throughput_dict_prime = {'Sloan g\'': 1, 'Sloan r\'': 1,
-                                 'Sloan i\'': 1, 'Sloan z\'': 1,
-                                 'Sloan u\'': 1, 'Halpha': 1, 'None': 1,
+        throughput_dict_prime = {'Baader g\'': 1, 'Baader r\'': 1,
+                                 'Baader i\'': 1, 'Baader z\'': 1,
+                                 'Baader u\'': 1, 'Halpha': 1, 'None': 1,
                                   'Baader OIII': 1}
         if tele_name == 'Clay (proto-Lightspeed)':
             throughput_dict = throughput_dict_prototype

@@ -109,7 +109,7 @@ class GroundObservatory(Observatory):
         exp_time_factor = (2 * self.exposure_time) ** (-1/2)
         airmass_factor = self.airmass ** (3/2)
         altitude_factor = np.exp(-self.altitude / 8000)
-        return 0.09 * diam_factor * exp_time_factor * airmass_factor * altitude_factor
+        return 2 * 0.09 * diam_factor * exp_time_factor * airmass_factor * altitude_factor
 
     def bkg_per_pix(self):
         '''The background noise per pixel, in e-/pix.'''
