@@ -43,6 +43,7 @@ sensor_dict_gb = {'Define New Sensor': basic_sensor, 'Sony IMX 455': imx455,
 
 sensor_dict_lightspeed = {'Define New Sensor': basic_sensor, 'qCMOS': qcmos, 'HiPERCAM': hipercam_sensor,
                           'Noiseless Ideal Sensor': noiseless_ideal_sensor}
+sensor_dict_web = {'Define New Sensor': basic_sensor, 'ORCA-Quest 2': qcmos}
 
 # Defining telescopes
 basic_tele = Telescope(diam=10, f_num=1)
@@ -79,7 +80,6 @@ telescope_dict_gb = {'Define New Telescope': basic_tele,
                      'Hale': hale_tele}
 
 telescope_dict_lightspeed = {'Define New Telescope': basic_tele,
-                             'Clay Native': Clay_tele_native,
                              'Clay (proto-Lightspeed)': Clay_tele_prototype,
                              'Clay (full Lightspeed)': Clay_tele_lightspeed,
                              'Clay Prime Focus': Clay_tele_prime,
@@ -87,6 +87,11 @@ telescope_dict_lightspeed = {'Define New Telescope': basic_tele,
                              'GTC (HiPERCAM)': gtc_hipercam_tele,
                              'GMT': gmt_tele, 'Keck (Z-imager)': keck_tele_zimager,
                              'Swope': swope}
+
+telescope_dict_web = {'Define New Telescope': basic_tele,
+                      'Clay (proto-Lightspeed)': Clay_tele_prototype,
+                      'Clay (full Lightspeed)': Clay_tele_lightspeed,
+                      'Clay Prime Focus': Clay_tele_prime}
 
 # Defining filters
 no_filter = SpectralElement(ConstFlux1D, amplitude=1.0)
@@ -184,11 +189,11 @@ baader_filter = SpectralElement(Empirical1D,
                              points=xpoints_oiii * 10 * u.AA,
                              lookup_table=ypoints_oiii)
 
-whitelight_throughput_proto = np.genfromtxt(data_folder + 'whitelight_throughput_proto.csv', delimiter=',')
+throughput_proto_data = np.genfromtxt(data_folder + 'whitelight_throughput_proto.csv', delimiter=',')
 # Account for 10% loss from fold mirror
-whitelight_throughput_proto_filter = SpectralElement(Empirical1D,
-                                                  points=whitelight_throughput_proto[:, 0] * u.AA,
-                                                  lookup_table=whitelight_throughput_proto[:, 1] * 0.9)
+throughput_proto = SpectralElement(Empirical1D,
+                                                  points=throughput_proto_data[:, 0] * u.AA,
+                                                  lookup_table=throughput_proto_data[:, 1] * 0.9)
 
 # filter_dict_gb = {'None': no_filter, 'Johnson U': johnson_u,
 #                   'Johnson B': johnson_b, 'Johnson V': johnson_v,
@@ -203,7 +208,12 @@ filter_dict_lightspeed = {"None": no_filter, "Baader u'": baader_uprime,
                           "Baader g'": baader_gprime, "Baader r'": baader_rprime,
                           "Baader i'": baader_iprime, "Baader z'": baader_zprime,
                           "Baader OIII": baader_filter, "Halpha": ha_filter,
-                          "HiPERCAM g'": hipercam_gprime, "Prototype White Light": whitelight_throughput_proto_filter}
+                          "HiPERCAM g'": hipercam_gprime}
+
+filter_dict_web = {"None": no_filter, "Baader u'": baader_uprime,
+                          "Baader g'": baader_gprime, "Baader r'": baader_rprime,
+                          "Baader i'": baader_iprime, "Baader z'": baader_zprime,
+                          "Baader OIII": baader_filter, "Halpha": ha_filter}
 
 # Bandpass representing transmission through the atmosphere at airmass 1
 atmo_bandpass_data = np.genfromtxt(data_folder + 'atmo_transmission_airmass1.csv',
