@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 from spectra import *
 from observatory import Sensor, Telescope
 from ground_observatory import GroundObservatory
-from instruments import sensor_dict_lightspeed, telescope_dict_lightspeed, filter_dict_lightspeed, atmo_bandpass
+from instruments import sensor_dict_lightspeed, telescope_dict_lightspeed, filter_dict_lightspeed, atmo_bandpass, lightspeed_thru
 
 data_folder = os.path.dirname(__file__) + '/../data/'
 
@@ -271,14 +271,14 @@ class MyGUI:
         tele_name = self.tele_vars['name'][2].get()
         filter_name = self.obs_vars_dict['filter'][2].get()
         # For white light, make a piecewise throughput
-        throughput_dict_prototype = {'Baader g\'': 0.57, 'Baader r\'': 0.65,
-                                     'Baader i\'': 0.28, 'Baader z\'': 0.06,
-                                     'Baader u\'': 0.05, 'Halpha': 0.65,
-                                     'Baader OIII': 0.57}
-        throughput_dict_lightspeed = {'Baader g\'': 0.8, 'Baader r\'': 0.8,
-                                     'Baader i\'': 0.8, 'Baader z\'': 0.8,
-                                     'Baader u\'': 0.8, 'Halpha': 0.8, 'None': 0.8,
-                                     'Baader OIII': 0.8}
+        throughput_dict_prototype = {'Baader g\'': 0.9 * 0.57, 'Baader r\'': 0.9 * 0.65,
+                                     'Baader i\'': 0.9 * 0.28, 'Baader z\'': 0.9 * 0.06,
+                                     'Baader u\'': 0.9 * 0.05, 'Halpha': 0.9 * 0.65,
+                                     'Baader OIII': 0.9 * 0.57}
+        throughput_dict_lightspeed = {'Baader g\'': 1, 'Baader r\'': 1,
+                                     'Baader i\'': 1, 'Baader z\'': 1,
+                                     'Baader u\'': 1, 'Halpha': 1, 'None': 1,
+                                     'Baader OIII': 1}
         throughput_dict_prime = {'Baader g\'': 1, 'Baader r\'': 1,
                                  'Baader i\'': 1, 'Baader z\'': 1,
                                  'Baader u\'': 1, 'Halpha': 1, 'None': 1,
@@ -360,6 +360,8 @@ class MyGUI:
         num_exposures = int(self.obs_vars_dict['num_exposures'][2].get())
         limiting_snr = self.obs_vars_dict['limiting_snr'][2].get()
         filter_bp = filter_dict_lightspeed[self.obs_vars_dict['filter'][2].get()]
+        if 'full Lightspeed' in self.tele_vars['name'][2].get() or 'Keck' in self.tele_vars['name'][2].get():
+            filter_bp = filter_bp * lightspeed_thru
         reimaging_throughput = self.obs_vars_dict['reim_throughput'][2].get()
         reimaging_bp = SpectralElement(ConstFlux1D, amplitude=reimaging_throughput)
         total_filter_bp = filter_bp * reimaging_bp
@@ -455,6 +457,8 @@ class MyGUI:
         sens_bp = obs.sensor.qe
         tele_bp = obs.telescope.bandpass
         filter_bp = filter_dict_lightspeed[self.obs_vars_dict['filter'][2].get()]
+        if 'full Lightspeed' in self.tele_vars['name'][2].get() or 'Keck' in self.tele_vars['name'][2].get():
+            filter_bp = filter_bp * lightspeed_thru
         reimaging_throughput = self.obs_vars_dict['reim_throughput'][2].get()
         reimaging_bp = SpectralElement(ConstFlux1D, amplitude=reimaging_throughput)
         atmo_throughput_with_airmass = atmo_bandpass(atmo_bandpass.waveset) ** obs.airmass
