@@ -271,43 +271,48 @@ if __name__ == '__main__':
     # tot_thru_r = baader_rprime * qcmos_qe * 0.65
     # tot_thru_i = baader_iprime * qcmos_qe * 0.28
     # tot_thru_z = baader_zprime * qcmos_qe * 0.06
-    # tot_thru_u2 = baader_uprime * qcmos_qe * 0.8
-    # tot_thru_g2 = baader_gprime * qcmos_qe * 0.8
-    # tot_thru_r2 = baader_rprime * qcmos_qe * 0.8
-    # tot_thru_i2 = baader_iprime * qcmos_qe * 0.8
-    # tot_thru_z2 = baader_zprime * qcmos_qe * 0.8
+    tot_thru_u2 = baader_uprime * qcmos_qe* atmo_bandpass * lightspeed_thru
+    tot_thru_g2 = baader_gprime * qcmos_qe * atmo_bandpass * lightspeed_thru
+    tot_thru_r2 = baader_rprime * qcmos_qe * atmo_bandpass * lightspeed_thru
+    tot_thru_i2 = baader_iprime * qcmos_qe * atmo_bandpass * lightspeed_thru
+    tot_thru_z2 = baader_zprime * qcmos_qe * atmo_bandpass * lightspeed_thru
     oiii_filter = SpectralElement(Empirical1D, 
                                 points=xpoints_oiii * 10 * u.AA,
                                 lookup_table=ypoints_oiii)
     tot_thru_oiii = oiii_filter * qcmos_qe * atmo_bandpass * 0.57
     tot_thru_halpha = ha_filter * qcmos_qe * atmo_bandpass * 0.65
+    tot_thru_oiii_2 = oiii_filter * qcmos_qe * atmo_bandpass * lightspeed_thru
+    tot_thru_halpha_2 = ha_filter * qcmos_qe * atmo_bandpass * lightspeed_thru
 
     plt.plot(tot_thru_u.waveset.to(u.nm).value, tot_thru_u(tot_thru_u.waveset) * 100, 'b--', alpha=0.5)
     plt.plot(tot_thru_g.waveset.to(u.nm).value, tot_thru_g(tot_thru_g.waveset) * 100, 'g--', alpha=0.5)
     plt.plot(tot_thru_r.waveset.to(u.nm).value, tot_thru_r(tot_thru_r.waveset) * 100, 'r--', alpha=0.5)
     plt.plot(tot_thru_i.waveset.to(u.nm).value, tot_thru_i(tot_thru_i.waveset) * 100, 'm--', alpha=0.5)
     plt.plot(tot_thru_z.waveset.to(u.nm).value, tot_thru_z(tot_thru_z.waveset) * 100, 'c--', alpha=0.5)
+    plt.plot(tot_thru_oiii.waveset.to(u.nm).value, tot_thru_oiii(tot_thru_oiii.waveset) * 100, '-.', color='darkorange', label='Baader OIII', alpha=0.5)
+    plt.plot(tot_thru_halpha.waveset.to(u.nm).value, tot_thru_halpha(tot_thru_halpha.waveset) * 100, '-.', color='darkred', label='Halpha', alpha=0.5)
     # plt.plot(tot_thru_u2.waveset.to(u.nm).value, tot_thru_u2(tot_thru_u2.waveset) * 100, 'b:', alpha=0.5)
     # plt.plot(tot_thru_g2.waveset.to(u.nm).value, tot_thru_g2(tot_thru_g2.waveset) * 100, 'g:', alpha=0.5)
     # plt.plot(tot_thru_r2.waveset.to(u.nm).value, tot_thru_r2(tot_thru_r2.waveset) * 100, 'r:', alpha=0.5)
     # plt.plot(tot_thru_i2.waveset.to(u.nm).value, tot_thru_i2(tot_thru_i2.waveset) * 100, 'm:', alpha=0.5)
     # plt.plot(tot_thru_z2.waveset.to(u.nm).value, tot_thru_z2(tot_thru_z2.waveset) * 100, 'c:', alpha=0.5)
-    plt.plot(tot_thru_oiii.waveset.to(u.nm).value, tot_thru_oiii(tot_thru_oiii.waveset) * 100, '-.', color='darkorange', label='Baader OIII', alpha=0.5)
-    plt.plot(tot_thru_halpha.waveset.to(u.nm).value, tot_thru_halpha(tot_thru_halpha.waveset) * 100, '-.', color='darkred', label='Halpha', alpha=0.5)
+    # plt.plot(tot_thru_oiii_2.waveset.to(u.nm).value, tot_thru_oiii_2(tot_thru_oiii_2.waveset) * 100, '-.', color='darkorange', label='Baader OIII', alpha=0.5)
+    # plt.plot(tot_thru_halpha_2.waveset.to(u.nm).value, tot_thru_halpha_2(tot_thru_halpha_2.waveset) * 100, '-.', color='darkred', label='Halpha', alpha=0.5)
     plt.text(tot_thru_u.pivot().to(u.nm).value, np.max(tot_thru_u(tot_thru_u.waveset)) * 100 + 0.5, "u'", color='b', ha='center')
     plt.text(tot_thru_g.pivot().to(u.nm).value, np.max(tot_thru_g(tot_thru_g.waveset)) * 100 + 0.5, "g'", color='g', ha='center')
     plt.text(tot_thru_r.pivot().to(u.nm).value, np.max(tot_thru_r(tot_thru_r.waveset)) * 100 + 0.5, "r'", color='r', ha='center')
     plt.text(tot_thru_i.pivot().to(u.nm).value, np.max(tot_thru_i(tot_thru_i.waveset)) * 100 + 0.5, "i'", color='m', ha='center')
     plt.text(tot_thru_z.pivot().to(u.nm).value, np.max(tot_thru_z(tot_thru_z.waveset)) * 100 + 0.5, "z'", color='c', ha='center')
+    plt.text(500.7, np.max(tot_thru_oiii(tot_thru_oiii.waveset)) * 100 + 0.5, "OIII", color='darkorange', ha='center')
+    plt.text(656.3, np.max(tot_thru_halpha(tot_thru_halpha.waveset)) * 100 + 0.5, r"$H_\alpha$", color='darkred', ha='center')
     # plt.text(tot_thru_u2.pivot().to(u.nm).value, np.max(tot_thru_u2(tot_thru_u2.waveset)) * 100 + 0.5, "u'", color='b', ha='center')
     # plt.text(tot_thru_g2.pivot().to(u.nm).value, np.max(tot_thru_g2(tot_thru_g2.waveset)) * 100 + 0.5, "g'", color='g', ha='center')
     # plt.text(tot_thru_r2.pivot().to(u.nm).value, np.max(tot_thru_r2(tot_thru_r2.waveset)) * 100 + 0.5, "r'", color='r', ha='center')
     # plt.text(tot_thru_i2.pivot().to(u.nm).value, np.max(tot_thru_i2(tot_thru_i2.waveset)) * 100 + 0.5, "i'", color='m', ha='center')
     # plt.text(tot_thru_z2.pivot().to(u.nm).value, np.max(tot_thru_z2(tot_thru_z2.waveset)) * 100 + 0.5, "z'", color='c', ha='center')
-    plt.text(500.7, np.max(tot_thru_oiii(tot_thru_oiii.waveset)) * 100 + 0.5, "OIII", color='darkorange', ha='center')
-    plt.text(656.3, np.max(tot_thru_halpha(tot_thru_halpha.waveset)) * 100 + 0.5, r"$H_\alpha$", color='darkred', ha='center')
     plt.xlim(300, 1050)
     plt.ylim(0.1, 45)
+    # plt.ylim(0.1, 60)
     plt.xlabel('Wavelength (nm)')
     plt.ylabel('Transmission (%)')
     # Make legend showing solid lines are current throughput and dotted lines are potential improved throughput.
